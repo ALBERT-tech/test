@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Анализатор Контрактов</title>
+    <title>Анализатор Контрактов (Динамический)</title>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <style>
@@ -161,11 +161,12 @@
             background: #F5F5F5;
         }
 
-        .results-section {
-            display: none;
+        /* Контейнер для динамических результатов */
+        .results-container {
+            display: none; /* Скрыто по умолчанию */
         }
-
-        .results-section.active {
+        
+        .results-container.active {
             display: block;
         }
 
@@ -176,6 +177,12 @@
             padding: 20px;
             margin-bottom: 16px;
             box-shadow: var(--shadow);
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .result-title {
@@ -183,6 +190,8 @@
             font-size: 16px;
             margin-bottom: 12px;
             color: var(--color-text);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .result-content {
@@ -269,8 +278,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>📋 Анализатор Контрактов</h1>
-            <p class="subtitle">Извлечение ключевых условий из договоров через ИИ</p>
+            <h1>📋 Универсальный Анализатор</h1>
+            <p class="subtitle">Отвечает на любые вопросы из prompt.txt</p>
         </header>
 
         <div class="input-section">
@@ -291,7 +300,7 @@
 
             <div class="button-group">
                 <button class="btn-primary" id="analyzeBtn">
-                    🔍 Анализировать договор
+                    🔍 Анализировать
                 </button>
                 <button class="btn-secondary" id="clearBtn">
                     Очистить
@@ -299,21 +308,9 @@
             </div>
         </div>
 
-        <div id="resultsSection" class="results-section">
-            <div class="result-card">
-                <div class="result-title">📅 Срок поставки</div>
-                <div id="deliveryTerm" class="result-content"></div>
-            </div>
-
-            <div class="result-card">
-                <div class="result-title">📍 Место поставки</div>
-                <div id="deliveryPlace" class="result-content"></div>
-            </div>
-
-            <div class="result-card">
-                <div class="result-title">💰 Обеспечение исполнения контракта</div>
-                <div id="performanceBond" class="result-content"></div>
-            </div>
+        <!-- СЮДА БУДУТ ДОБАВЛЯТЬСЯ РЕЗУЛЬТАТЫ ДИНАМИЧЕСКИ -->
+        <div id="resultsContainer" class="results-container">
+            <!-- Карточки сгенерируются через JS -->
         </div>
     </div>
 
@@ -326,12 +323,15 @@
         const API_KEY = 'sk-uQ_fcf3qvOFDHiM7u5IamQ';
         const API_URL = 'https://litellm.tokengate.ru/v1/chat/completions';
         const MODEL = 'deepseek/deepseek-chat';
+        const PROMPT_URL = './prompt.txt';
+        
+        let PROMPT_TEMPLATE_CACHE = null;
 
         const contractText = document.getElementById('contractText');
         const fileInput = document.getElementById('fileInput');
         const analyzeBtn = document.getElementById('analyzeBtn');
         const clearBtn = document.getElementById('clearBtn');
-        const resultsSection = document.getElementById('resultsSection');
+        const resultsContainer = document.getElementById('resultsContainer'); // Новое имя контейнера
         const errorMessage = document.getElementById('errorMessage');
         const fileName = document.getElementById('fileName');
 
@@ -339,20 +339,12 @@
         analyzeBtn.addEventListener('click', analyzeContract);
         clearBtn.addEventListener('click', clearForm);
 
+        // --- ФУНКЦИИ ЗАГРУЗКИ ФАЙЛОВ (без изменений) ---
         async function extractDocxText(arrayBuffer) {
             try {
                 const zip = await JSZip.loadAsync(arrayBuffer);
                 const xmlContent = await zip.file('word/document.xml').async('text');
-                
-                const text = xmlContent
-                    .replace(/<[^>]*>/g, ' ')
-                    .replace(/&nbsp;/g, ' ')
-                    .replace(/&lt;/g, '<')
-                    .replace(/&gt;/g, '>')
-                    .replace(/&amp;/g, '&')
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                
+                const text = xmlContent.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
                 return text;
             } catch (error) {
                 throw new Error('Не удалось распарсить DOCX файл: ' + error.message);
@@ -361,22 +353,14 @@
 
         async function extractPdfText(arrayBuffer) {
             try {
-                if (typeof pdfjsLib === 'undefined') {
-                    throw new Error('Библиотека PDF.js не загрузилась');
-                }
-
+                if (typeof pdfjsLib === 'undefined') throw new Error('Библиотека PDF.js не загрузилась');
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 let fullText = '';
-
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
                     const textContent = await page.getTextContent();
-                    const pageText = textContent.items
-                        .map(item => item.str)
-                        .join(' ');
-                    fullText += pageText + ' ';
+                    fullText += textContent.items.map(item => item.str).join(' ') + ' ';
                 }
-
                 return fullText.trim();
             } catch (error) {
                 throw new Error('Не удалось распарсить PDF файл: ' + error.message);
@@ -386,34 +370,23 @@
         async function handleFileUpload(e) {
             const file = e.target.files[0];
             if (!file) return;
-
             fileName.textContent = `Загружаю: ${file.name}...`;
             errorMessage.style.display = 'none';
-
             try {
                 let text = '';
-
                 if (file.name.endsWith('.docx')) {
-                    if (typeof JSZip === 'undefined') {
-                        throw new Error('Библиотека для работы с DOCX загружается. Попробуйте через секунду.');
-                    }
-                    const arrayBuffer = await file.arrayBuffer();
-                    text = await extractDocxText(arrayBuffer);
-                } 
-                else if (file.name.endsWith('.pdf')) {
-                    const arrayBuffer = await file.arrayBuffer();
-                    text = await extractPdfText(arrayBuffer);
-                } 
-                else {
-                    // TXT и остальное
+                    if (typeof JSZip === 'undefined') throw new Error('Ждем загрузку JSZip...');
+                    text = await extractDocxText(await file.arrayBuffer());
+                } else if (file.name.endsWith('.pdf')) {
+                    text = await extractPdfText(await file.arrayBuffer());
+                } else {
                     text = await file.text();
                 }
-
                 contractText.value = text;
                 fileName.textContent = `✅ Файл загружен: ${file.name}`;
             } catch (error) {
                 fileName.textContent = '';
-                showError(`Ошибка при загрузке файла: ${error.message}`);
+                showError(`Ошибка загрузки: ${error.message}`);
             }
         }
 
@@ -421,31 +394,46 @@
             contractText.value = '';
             fileInput.value = '';
             fileName.textContent = '';
-            resultsSection.classList.remove('active');
+            resultsContainer.innerHTML = ''; // Очищаем всё
+            resultsContainer.classList.remove('active');
             errorMessage.style.display = 'none';
+        }
+
+        // --- ЛОГИКА АНАЛИЗА ---
+
+        async function loadPromptTemplate() {
+            if (PROMPT_TEMPLATE_CACHE) return PROMPT_TEMPLATE_CACHE;
+            try {
+                const resp = await fetch(PROMPT_URL, { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`Ошибка загрузки prompt.txt: ${resp.status}`);
+                PROMPT_TEMPLATE_CACHE = await resp.text();
+                return PROMPT_TEMPLATE_CACHE;
+            } catch (e) {
+                throw new Error('Не удалось найти prompt.txt. Проверьте, что он лежит рядом с index.html');
+            }
         }
 
         async function analyzeContract() {
             const text = contractText.value.trim();
-
-            if (!text) {
-                showError('Пожалуйста, введите или загрузите текст договора');
-                return;
-            }
+            if (!text) { showError('Сначала введите текст или загрузите файл'); return; }
 
             analyzeBtn.disabled = true;
             errorMessage.style.display = 'none';
-            resultsSection.classList.remove('active');
-
+            resultsContainer.classList.remove('active');
+            
             const originalButtonText = analyzeBtn.innerHTML;
-            analyzeBtn.innerHTML = 'Анализирую<span class="loading"><span class="spinner"></span></span>';
+            analyzeBtn.innerHTML = 'Думаю...<span class="loading"><span class="spinner"></span></span>';
 
             try {
-                const results = await queryDeepSeek(text);
-                displayResults(results);
-                resultsSection.classList.add('active');
+                // 1. Делаем запрос
+                const resultsArray = await queryDeepSeek(text);
+                
+                // 2. Рендерим ДИНАМИЧЕСКИЙ список
+                renderDynamicResults(resultsArray);
+                
+                resultsContainer.classList.add('active');
             } catch (error) {
-                showError('Ошибка при анализе: ' + error.message);
+                showError('Ошибка: ' + error.message);
             } finally {
                 analyzeBtn.disabled = false;
                 analyzeBtn.innerHTML = originalButtonText;
@@ -453,94 +441,82 @@
         }
 
         async function queryDeepSeek(contractText) {
+            const template = await loadPromptTemplate();
+            const prompt = template.replace('{{CONTRACT_TEXT}}', contractText);
+
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                body: JSON.stringify({
+                    model: MODEL,
+                    messages: [{ role: 'user', content: prompt }],
+                    temperature: 0.1,
+                    max_tokens: 1500 // Чуть больше токенов для длинных ответов
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error?.message || response.statusText);
+            }
+
+            const data = await response.json();
+            let content = data.choices[0]?.message?.content?.trim() || '';
+            
+            console.log('API RAW:', content);
+
+            // Чистим Markdown
+            const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (jsonMatch) content = jsonMatch[1].trim();
+
             try {
-                // Загрузка промпта из отдельного файла
-                const response = await fetch('prompt.txt');
-                if (!response.ok) {
-                    throw new Error(`Не удалось загрузить промпт: ${response.status}`);
+                const parsed = JSON.parse(content);
+                // Проверка: мы ждем массив
+                if (!Array.isArray(parsed)) {
+                    throw new Error('AI вернул не список (Array), а объект. Проверьте prompt.txt');
                 }
-                let promptTemplate = await response.text();
-                
-                // Заменяем плейсхолдер на текст договора
-                const prompt = promptTemplate.replace('{{CONTRACT_TEXT}}', contractText);
-
-                const responseAPI = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${API_KEY}`
-                    },
-                    body: JSON.stringify({
-                        model: MODEL,
-                        messages: [
-                            {
-                                role: 'user',
-                                content: prompt
-                            }
-                        ],
-                        temperature: 1.0,
-                        max_tokens: 1000
-                    })
-                });
-
-                if (!responseAPI.ok) {
-                    const errorData = await responseAPI.json();
-                    throw new Error(`API Error: ${errorData.error?.message || responseAPI.statusText}`);
-                }
-
-                const data = await responseAPI.json();
-                let content = data.choices[0]?.message?.content?.trim() || '';
-
-                console.log('📝 Сырой ответ API:', content);
-
-                // Извлекаем JSON из markdown блока если он обёрнут
-                const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-                if (jsonMatch) {
-                    content = jsonMatch[1].trim();
-                    console.log('✅ Извлечено JSON из markdown блока:', content);
-                }
-
-                try {
-                    return JSON.parse(content);
-                } catch (e) {
-                    console.error('❌ Ошибка парсинга JSON:', e.message);
-                    console.error('📋 Содержимое ответа:', content);
-                    throw new Error('Не удалось распарсить ответ ИИ как JSON. Проверьте консоль (F12).');
-                }
-            } catch (error) {
-                console.error('❌ Ошибка в queryDeepSeek:', error);
-                throw error;
+                return parsed;
+            } catch (e) {
+                console.error(e);
+                throw new Error('Ошибка чтения JSON ответа. См. консоль.');
             }
         }
 
-        function displayResults(results) {
-            displayField('deliveryTerm', results.delivery_term);
-            displayField('deliveryPlace', results.delivery_place);
-            displayField('performanceBond', results.performance_bond);
-        }
+        // --- ГЛАВНАЯ МАГИЯ: Рендеринг любого количества вопросов ---
+        function renderDynamicResults(dataArray) {
+            resultsContainer.innerHTML = ''; // Очистка старого
 
-        function displayField(elementId, data) {
-            const element = document.getElementById(elementId);
-            
-            if (!data) {
-                element.innerHTML = '<div class="not-found">⚠️ Данные не найдены</div>';
+            if (!dataArray || dataArray.length === 0) {
+                resultsContainer.innerHTML = '<div class="error-message">Ответ пуст</div>';
                 return;
             }
 
-            const answer = data.answer || 'Информация не найдена в документе';
-            const citation = data.citation || '';
+            // Пробегаемся по каждому элементу массива, который вернул ИИ
+            dataArray.forEach(item => {
+                // Создаем карточку
+                const card = document.createElement('div');
+                card.className = 'result-card';
 
-            let html = `<p>${escapeHtml(answer)}</p>`;
+                const title = item.title || 'Без названия';
+                const answer = item.answer || 'Нет ответа';
+                const citation = item.citation || '';
 
-            if (citation && answer !== 'Информация не найдена в документе') {
-                html += `<div class="citation">📌 ${escapeHtml(citation)}</div>`;
-            }
+                // Формируем HTML внутри карточки
+                let htmlContent = `
+                    <div class="result-title">${escapeHtml(title)}</div>
+                    <div class="result-content">
+                        <p>${escapeHtml(answer)}</p>
+                    </div>
+                `;
 
-            if (answer === 'Информация не найдена в документе') {
-                html = `<div class="not-found">⚠️ ${escapeHtml(answer)}</div>`;
-            }
+                // Добавляем цитату только если она есть
+                if (citation && citation.toLowerCase() !== 'информация не найдена') {
+                    htmlContent += `<div class="citation">📌 ${escapeHtml(citation)}</div>`;
+                }
 
-            element.innerHTML = html;
+                card.innerHTML = htmlContent;
+                resultsContainer.appendChild(card);
+            });
         }
 
         function showError(message) {
@@ -549,14 +525,9 @@
         }
 
         function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, m => map[m]);
+            if (!text) return '';
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return text.replace(/[&<>\"']/g, m => map[m]);
         }
     </script>
 </body>
