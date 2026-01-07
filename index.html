@@ -311,7 +311,7 @@
             </div>
 
             <div class="result-card">
-                <div class="result-title">💰 Обеспечение исполнения (контракта/договора)</div>
+                <div class="result-title">💰 Обеспечение исполнения контракта</div>
                 <div id="performanceBond" class="result-content"></div>
             </div>
         </div>
@@ -326,9 +326,6 @@
         const API_KEY = 'sk-uQ_fcf3qvOFDHiM7u5IamQ';
         const API_URL = 'https://litellm.tokengate.ru/v1/chat/completions';
         const MODEL = 'deepseek/deepseek-chat';
-        const PROMPT_URL = './prompt.txt';
-        
-        let PROMPT_TEMPLATE_CACHE = null;
 
         const contractText = document.getElementById('contractText');
         const fileInput = document.getElementById('fileInput');
@@ -428,21 +425,6 @@
             errorMessage.style.display = 'none';
         }
 
-        async function loadPromptTemplate() {
-            if (PROMPT_TEMPLATE_CACHE) return PROMPT_TEMPLATE_CACHE;
-            
-            try {
-                const resp = await fetch(PROMPT_URL, { cache: 'no-store' });
-                if (!resp.ok) {
-                    throw new Error(`Ошибка загрузки prompt.txt: ${resp.status}`);
-                }
-                PROMPT_TEMPLATE_CACHE = await resp.text();
-                return PROMPT_TEMPLATE_CACHE;
-            } catch (e) {
-                throw new Error('Не удалось загрузить файл prompt.txt. Убедитесь, что он лежит рядом с index.html и вы запускаете через локальный сервер.');
-            }
-        }
-
         async function analyzeContract() {
             const text = contractText.value.trim();
 
@@ -471,55 +453,63 @@
         }
 
         async function queryDeepSeek(contractText) {
-            // Загружаем шаблон из внешнего файла
-            const template = await loadPromptTemplate();
-            
-            // Подставляем текст договора вместо метки
-            const prompt = template.replace('{{CONTRACT_TEXT}}', contractText);
-
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${API_KEY}`
-                },
-                body: JSON.stringify({
-                    model: MODEL,
-                    messages: [
-                        {
-                            role: 'user',
-                            content: prompt
-                        }
-                    ],
-                    // Ставим низкую температуру для большей точности
-                    temperature: 0.1,
-                    max_tokens: 1000
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`API Error: ${errorData.error?.message || response.statusText}`);
-            }
-
-            const data = await response.json();
-            let content = data.choices[0]?.message?.content?.trim() || '';
-
-            console.log('📝 Сырой ответ API:', content);
-
-            // Извлекаем JSON из markdown блока если он обёрнут
-            const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch) {
-                content = jsonMatch[1].trim();
-                console.log('✅ Извлечено JSON из markdown блока:', content);
-            }
-
             try {
-                return JSON.parse(content);
-            } catch (e) {
-                console.error('❌ Ошибка парсинга JSON:', e.message);
-                console.error('📋 Содержимое ответа:', content);
-                throw new Error('Не удалось распарсить ответ ИИ как JSON. Проверьте консоль (F12).');
+                // Загрузка промпта из отдельного файла
+                const response = await fetch('prompt.txt');
+                if (!response.ok) {
+                    throw new Error(`Не удалось загрузить промпт: ${response.status}`);
+                }
+                let promptTemplate = await response.text();
+                
+                // Заменяем плейсхолдер на текст договора
+                const prompt = promptTemplate.replace('{{CONTRACT_TEXT}}', contractText);
+
+                const responseAPI = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: MODEL,
+                        messages: [
+                            {
+                                role: 'user',
+                                content: prompt
+                            }
+                        ],
+                        temperature: 1.0,
+                        max_tokens: 1000
+                    })
+                });
+
+                if (!responseAPI.ok) {
+                    const errorData = await responseAPI.json();
+                    throw new Error(`API Error: ${errorData.error?.message || responseAPI.statusText}`);
+                }
+
+                const data = await responseAPI.json();
+                let content = data.choices[0]?.message?.content?.trim() || '';
+
+                console.log('📝 Сырой ответ API:', content);
+
+                // Извлекаем JSON из markdown блока если он обёрнут
+                const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                if (jsonMatch) {
+                    content = jsonMatch[1].trim();
+                    console.log('✅ Извлечено JSON из markdown блока:', content);
+                }
+
+                try {
+                    return JSON.parse(content);
+                } catch (e) {
+                    console.error('❌ Ошибка парсинга JSON:', e.message);
+                    console.error('📋 Содержимое ответа:', content);
+                    throw new Error('Не удалось распарсить ответ ИИ как JSON. Проверьте консоль (F12).');
+                }
+            } catch (error) {
+                console.error('❌ Ошибка в queryDeepSeek:', error);
+                throw error;
             }
         }
 
@@ -561,11 +551,12 @@
         function escapeHtml(text) {
             const map = {
                 '&': '&amp;',
-                '<': '&lt;',\n                '>': '&gt;',
+                '<': '&lt;',
+                '>': '&gt;',
                 '"': '&quot;',
                 "'": '&#039;'
             };
-            return text.replace(/[&<>\"']/g, m => map[m]);
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
     </script>
 </body>
