@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Анализатор Контрактов (Динамический)</title>
+    <title>Анализатор критериев оценки</title>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <style>
@@ -36,7 +36,7 @@
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
@@ -161,68 +161,67 @@
             background: #F5F5F5;
         }
 
-        /* Контейнер для динамических результатов */
-        .results-container {
-            display: none; /* Скрыто по умолчанию */
+        /* Результаты */
+        .results-section {
+            display: none;
         }
-        
-        .results-container.active {
+
+        .results-section.active {
             display: block;
         }
 
-        .result-card {
-            background: var(--color-surface);
-            border-left: 4px solid var(--color-primary);
-            border-radius: var(--radius);
-            padding: 20px;
-            margin-bottom: 16px;
-            box-shadow: var(--shadow);
-            animation: fadeIn 0.5s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .result-title {
+        .results-title {
+            font-size: 18px;
             font-weight: 600;
-            font-size: 16px;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
             color: var(--color-text);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
-        .result-content {
-            color: var(--color-text-secondary);
-            line-height: 1.6;
+        .table-wrapper {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow-x: auto;
         }
 
-        .result-content p {
-            margin-bottom: 8px;
+        table {
+            width: 100%;
+            border-collapse: collapse;
         }
 
-        .citation {
-            background: rgba(32, 140, 141, 0.05);
-            border-left: 3px solid var(--color-primary);
-            padding: 12px;
-            margin-top: 12px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-style: italic;
-            color: var(--color-text-secondary);
-            font-family: monospace;
+        thead {
+            background: rgba(32, 140, 141, 0.08);
         }
 
-        .not-found {
-            background: rgba(192, 21, 47, 0.05);
-            border-left: 3px solid var(--color-error);
-            color: var(--color-error);
-            padding: 12px;
-            border-radius: 4px;
+        th {
+            padding: 14px;
+            text-align: left;
+            font-weight: 600;
             font-size: 14px;
+            color: var(--color-text);
+            border-bottom: 2px solid var(--color-border);
+        }
+
+        td {
+            padding: 14px;
+            border-bottom: 1px solid var(--color-border);
+            color: var(--color-text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        tbody tr:hover {
+            background: rgba(32, 140, 141, 0.03);
+        }
+
+        .citation-note {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            font-style: italic;
             margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(32, 140, 141, 0.2);
         }
 
         .loading {
@@ -260,6 +259,23 @@
             color: var(--color-text-secondary);
         }
 
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--color-text-secondary);
+        }
+
+        .footer a {
+            color: var(--color-primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
         @media (max-width: 768px) {
             .button-group {
                 flex-direction: column;
@@ -272,22 +288,30 @@
             h1 {
                 font-size: 22px;
             }
+
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 10px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>📋 Универсальный Анализатор</h1>
-            <p class="subtitle">Отвечает на любые вопросы из prompt.txt</p>
+            <h1>📊 Анализатор Критериев Оценки</h1>
+            <p class="subtitle">Извлечение критериев из порядков оценки заявок</p>
         </header>
 
         <div class="input-section">
             <div class="form-group">
-                <label for="contractText">Содержимое договора:</label>
+                <label for="contractText">Порядок оценки заявок (документ):</label>
                 <textarea 
                     id="contractText" 
-                    placeholder="Вставьте текст договора сюда или загрузите файл (.txt, .docx, .pdf)..."
+                    placeholder="Вставьте текст документа или загрузите файл (.txt, .docx, .pdf)..."
                 ></textarea>
                 <div class="file-input-wrapper">
                     <label for="fileInput" class="file-label">📁 Загрузить файл (.txt, .docx, .pdf)</label>
@@ -308,11 +332,32 @@
             </div>
         </div>
 
-        <!-- СЮДА БУДУТ ДОБАВЛЯТЬСЯ РЕЗУЛЬТАТЫ ДИНАМИЧЕСКИ -->
-        <div id="resultsContainer" class="results-container">
-            <!-- Карточки сгенерируются через JS -->
+        <!-- ТАБЛИЦА РЕЗУЛЬТАТОВ -->
+        <div id="resultsSection" class="results-section">
+            <div class="results-title">✅ Критерии оценки:</div>
+            <div class="table-wrapper">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Критерий оценки</th>
+                            <th>Вес (%)</th>
+                            <th>Методика оценки</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Строки сгенерируются здесь -->
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
+
+    <footer class="footer">
+        Разработано в лаборатории
+        <a href="https://t.me/tickettotender" target="_blank" rel="noopener noreferrer">
+            тендеры ex machina
+        </a>
+    </footer>
 
     <script>
         // Настройка worker для PDF.js
@@ -331,7 +376,8 @@
         const fileInput = document.getElementById('fileInput');
         const analyzeBtn = document.getElementById('analyzeBtn');
         const clearBtn = document.getElementById('clearBtn');
-        const resultsContainer = document.getElementById('resultsContainer'); // Новое имя контейнера
+        const resultsSection = document.getElementById('resultsSection');
+        const tableBody = document.getElementById('tableBody');
         const errorMessage = document.getElementById('errorMessage');
         const fileName = document.getElementById('fileName');
 
@@ -339,7 +385,7 @@
         analyzeBtn.addEventListener('click', analyzeContract);
         clearBtn.addEventListener('click', clearForm);
 
-        // --- ФУНКЦИИ ЗАГРУЗКИ ФАЙЛОВ (без изменений) ---
+        // --- ФУНКЦИИ ЗАГРУЗКИ ФАЙЛОВ ---
         async function extractDocxText(arrayBuffer) {
             try {
                 const zip = await JSZip.loadAsync(arrayBuffer);
@@ -347,13 +393,13 @@
                 const text = xmlContent.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
                 return text;
             } catch (error) {
-                throw new Error('Не удалось распарсить DOCX файл: ' + error.message);
+                throw new Error('Не удалось распарсить DOCX: ' + error.message);
             }
         }
 
         async function extractPdfText(arrayBuffer) {
             try {
-                if (typeof pdfjsLib === 'undefined') throw new Error('Библиотека PDF.js не загрузилась');
+                if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js не загрузился');
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 let fullText = '';
                 for (let i = 1; i <= pdf.numPages; i++) {
@@ -363,7 +409,7 @@
                 }
                 return fullText.trim();
             } catch (error) {
-                throw new Error('Не удалось распарсить PDF файл: ' + error.message);
+                throw new Error('Не удалось распарсить PDF: ' + error.message);
             }
         }
 
@@ -394,12 +440,10 @@
             contractText.value = '';
             fileInput.value = '';
             fileName.textContent = '';
-            resultsContainer.innerHTML = ''; // Очищаем всё
-            resultsContainer.classList.remove('active');
+            tableBody.innerHTML = '';
+            resultsSection.classList.remove('active');
             errorMessage.style.display = 'none';
         }
-
-        // --- ЛОГИКА АНАЛИЗА ---
 
         async function loadPromptTemplate() {
             if (PROMPT_TEMPLATE_CACHE) return PROMPT_TEMPLATE_CACHE;
@@ -409,29 +453,25 @@
                 PROMPT_TEMPLATE_CACHE = await resp.text();
                 return PROMPT_TEMPLATE_CACHE;
             } catch (e) {
-                throw new Error('Не удалось найти prompt.txt. Проверьте, что он лежит рядом с index.html');
+                throw new Error('Не удалось найти prompt.txt');
             }
         }
 
         async function analyzeContract() {
             const text = contractText.value.trim();
-            if (!text) { showError('Сначала введите текст или загрузите файл'); return; }
+            if (!text) { showError('Введите или загрузите текст'); return; }
 
             analyzeBtn.disabled = true;
             errorMessage.style.display = 'none';
-            resultsContainer.classList.remove('active');
+            resultsSection.classList.remove('active');
             
             const originalButtonText = analyzeBtn.innerHTML;
-            analyzeBtn.innerHTML = 'Думаю...<span class="loading"><span class="spinner"></span></span>';
+            analyzeBtn.innerHTML = 'Анализирую...<span class="loading"><span class="spinner"></span></span>';
 
             try {
-                // 1. Делаем запрос
                 const resultsArray = await queryDeepSeek(text);
-                
-                // 2. Рендерим ДИНАМИЧЕСКИЙ список
-                renderDynamicResults(resultsArray);
-                
-                resultsContainer.classList.add('active');
+                renderTable(resultsArray);
+                resultsSection.classList.add('active');
             } catch (error) {
                 showError('Ошибка: ' + error.message);
             } finally {
@@ -451,7 +491,7 @@
                     model: MODEL,
                     messages: [{ role: 'user', content: prompt }],
                     temperature: 0.1,
-                    max_tokens: 1500 // Чуть больше токенов для длинных ответов
+                    max_tokens: 2000
                 })
             });
 
@@ -465,57 +505,52 @@
             
             console.log('API RAW:', content);
 
-            // Чистим Markdown
             const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
             if (jsonMatch) content = jsonMatch[1].trim();
 
             try {
                 const parsed = JSON.parse(content);
-                // Проверка: мы ждем массив
                 if (!Array.isArray(parsed)) {
-                    throw new Error('AI вернул не список (Array), а объект. Проверьте prompt.txt');
+                    throw new Error('Ожидается массив критериев');
                 }
                 return parsed;
             } catch (e) {
                 console.error(e);
-                throw new Error('Ошибка чтения JSON ответа. См. консоль.');
+                throw new Error('Ошибка парсинга JSON ответа');
             }
         }
 
-        // --- ГЛАВНАЯ МАГИЯ: Рендеринг любого количества вопросов ---
-        function renderDynamicResults(dataArray) {
-            resultsContainer.innerHTML = ''; // Очистка старого
+        // --- РЕНДЕРИНГ ТАБЛИЦЫ ---
+        function renderTable(dataArray) {
+            tableBody.innerHTML = '';
 
             if (!dataArray || dataArray.length === 0) {
-                resultsContainer.innerHTML = '<div class="error-message">Ответ пуст</div>';
+                tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--color-error);">Критерии не найдены</td></tr>';
                 return;
             }
 
-            // Пробегаемся по каждому элементу массива, который вернул ИИ
             dataArray.forEach(item => {
-                // Создаем карточку
-                const card = document.createElement('div');
-                card.className = 'result-card';
-
-                const title = item.title || 'Без названия';
-                const answer = item.answer || 'Нет ответа';
+                const row = document.createElement('tr');
+                
+                const criterion = escapeHtml(item.criterion || '-');
+                const weight = escapeHtml(item.weight || '-');
+                const methodology = escapeHtml(item.methodology || '-');
                 const citation = item.citation || '';
 
-                // Формируем HTML внутри карточки
-                let htmlContent = `
-                    <div class="result-title">${escapeHtml(title)}</div>
-                    <div class="result-content">
-                        <p>${escapeHtml(answer)}</p>
-                    </div>
-                `;
-
-                // Добавляем цитату только если она есть
-                if (citation && citation.toLowerCase() !== 'информация не найдена') {
-                    htmlContent += `<div class="citation">📌 ${escapeHtml(citation)}</div>`;
+                // Основные ячейки
+                let methodologyCell = `<td>${methodology}`;
+                if (citation) {
+                    methodologyCell += `<div class="citation-note">📌 ${escapeHtml(citation)}</div>`;
                 }
+                methodologyCell += '</td>';
 
-                card.innerHTML = htmlContent;
-                resultsContainer.appendChild(card);
+                row.innerHTML = `
+                    <td><strong>${criterion}</strong></td>
+                    <td>${weight}</td>
+                    ${methodologyCell}
+                `;
+                
+                tableBody.appendChild(row);
             });
         }
 
