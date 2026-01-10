@@ -161,7 +161,40 @@
             background: #F5F5F5;
         }
 
-        /* Результаты */
+        /* ВКЛАДКИ */
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--color-border);
+        }
+
+        .tab-button {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: var(--color-text-secondary);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .tab-button.active {
+            color: var(--color-primary);
+            border-bottom-color: var(--color-primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* РЕЗУЛЬТАТЫ */
         .results-section {
             display: none;
         }
@@ -222,6 +255,120 @@
             margin-top: 8px;
             padding-top: 8px;
             border-top: 1px solid rgba(32, 140, 141, 0.2);
+        }
+
+        /* КАЛЬКУЛЯТОР */
+        .calculator-section {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .calc-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--color-text);
+        }
+
+        .calc-subtitle {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            margin-bottom: 16px;
+            font-style: italic;
+        }
+
+        .calc-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .calc-field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .calc-field label {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--color-text);
+        }
+
+        .calc-field input {
+            padding: 10px 12px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            font-size: 14px;
+            color: var(--color-text);
+        }
+
+        .calc-field input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(32, 140, 141, 0.1);
+        }
+
+        .calc-help {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        .calc-button {
+            padding: 12px 24px;
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            align-self: flex-start;
+        }
+
+        .calc-button:hover {
+            background: #1B7577;
+        }
+
+        .calc-result {
+            background: rgba(32, 140, 141, 0.08);
+            border-left: 4px solid var(--color-primary);
+            padding: 16px;
+            border-radius: var(--radius);
+            margin-top: 20px;
+            display: none;
+        }
+
+        .calc-result.active {
+            display: block;
+        }
+
+        .result-line {
+            padding: 10px 0;
+            font-size: 14px;
+            color: var(--color-text);
+        }
+
+        .result-line strong {
+            color: var(--color-primary);
+        }
+
+        .result-highlight {
+            background: rgba(32, 140, 141, 0.15);
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 12px;
+            font-weight: 600;
+            color: var(--color-primary);
+            font-size: 15px;
+            text-align: center;
         }
 
         .loading {
@@ -296,6 +443,19 @@
             th, td {
                 padding: 10px;
             }
+
+            .calc-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                flex-wrap: wrap;
+            }
+
+            .tab-button {
+                padding: 10px 16px;
+                font-size: 13px;
+            }
         }
     </style>
 </head>
@@ -303,7 +463,7 @@
     <div class="container">
         <header>
             <h1>📊 Анализатор Критериев Оценки</h1>
-            <p class="subtitle">Извлечение критериев из порядков оценки заявок</p>
+            <p class="subtitle">Анализ порядка оценки + калькулятор конкурентоспособности</p>
         </header>
 
         <div class="input-section">
@@ -332,22 +492,79 @@
             </div>
         </div>
 
-        <!-- ТАБЛИЦА РЕЗУЛЬТАТОВ -->
+        <!-- ВКЛАДКИ -->
         <div id="resultsSection" class="results-section">
-            <div class="results-title">✅ Критерии оценки:</div>
-            <div class="table-wrapper">
-                <table id="resultsTable">
-                    <thead>
-                        <tr>
-                            <th>Критерий оценки</th>
-                            <th>Вес (%)</th>
-                            <th>Методика оценки</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                        <!-- Строки сгенерируются здесь -->
-                    </tbody>
-                </table>
+            <div class="tabs">
+                <button class="tab-button active" data-tab="table">📋 Таблица критериев</button>
+                <button class="tab-button" data-tab="calculator">🧮 Калькулятор конкурентности</button>
+            </div>
+
+            <!-- ВКЛ. 1: ТАБЛИЦА -->
+            <div id="table" class="tab-content active">
+                <div class="results-title">✅ Критерии оценки:</div>
+                <div class="table-wrapper">
+                    <table id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>Критерий оценки</th>
+                                <th>Вес (%)</th>
+                                <th>Методика оценки</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- Строки сгенерируются здесь -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ВКЛ. 2: КАЛЬКУЛЯТОР -->
+            <div id="calculator" class="tab-content">
+                <div class="calculator-section">
+                    <div class="calc-title">🧮 Калькулятор конкурентоспособности</div>
+                    <div class="calc-subtitle">Вводите нестоимостные критерии вашей компании и лидера рынка, рассчитаем точку конкурентоспособности</div>
+                    
+                    <!-- Форма ввода -->
+                    <div class="calc-grid">
+                        <div class="calc-field">
+                            <label for="criterionName">Названия нестоимостного критерия</label>
+                            <input type="text" id="criterionName" placeholder="Например: Квалификация участников">
+                            <div class="calc-help">Из таблицы выше</div>
+                        </div>
+                        <div class="calc-field">
+                            <label for="criterionWeight">Вес критерия (%)</label>
+                            <input type="number" id="criterionWeight" placeholder="Например: 40" min="0" max="100">
+                            <div class="calc-help">Из таблицы выше</div>
+                        </div>
+                        <div class="calc-field">
+                            <label for="leaderHistoricalDropdown">Историческое падение цены лидера рынка (%)</label>
+                            <input type="number" id="leaderHistoricalDropdown" placeholder="Например: 3" min="0" max="100" step="0.1">
+                            <div class="calc-help">На сколько % в среднем снижает цену лидер</div>
+                        </div>
+                        <div class="calc-field">
+                            <label for="leaderNonCostScore">Баллы лидера по нестоимостным критериям</label>
+                            <input type="number" id="leaderNonCostScore" placeholder="Например: 95" min="0" max="100">
+                            <div class="calc-help">Вводите вручную или из расчётов</div>
+                        </div>
+                        <div class="calc-field">
+                            <label for="yourNonCostScore">Ваши баллы по нестоимостным критериям</label>
+                            <input type="number" id="yourNonCostScore" placeholder="Например: 70" min="0" max="100">
+                            <div class="calc-help">Вводите вручную или из расчётов</div>
+                        </div>
+                        <div class="calc-field">
+                            <label for="leaderBasePrice">Базовая цена лидера</label>
+                            <input type="number" id="leaderBasePrice" placeholder="Например: 1000000" min="0">
+                            <div class="calc-help">Их начальная цена или примерная</div>
+                        </div>
+                    </div>
+
+                    <button class="calc-button" id="calcBtn">📊 Рассчитать</button>
+
+                    <!-- Результаты -->
+                    <div id="calcResult" class="calc-result">
+                        <div id="calcResultContent"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -371,6 +588,7 @@
         const PROMPT_URL = './prompt.txt';
         
         let PROMPT_TEMPLATE_CACHE = null;
+        let CURRENT_CRITERIA = null; // Сохраняем критерии для калькулятора
 
         const contractText = document.getElementById('contractText');
         const fileInput = document.getElementById('fileInput');
@@ -380,10 +598,30 @@
         const tableBody = document.getElementById('tableBody');
         const errorMessage = document.getElementById('errorMessage');
         const fileName = document.getElementById('fileName');
+        const calcBtn = document.getElementById('calcBtn');
+        const calcResult = document.getElementById('calcResult');
+        const calcResultContent = document.getElementById('calcResultContent');
 
         fileInput.addEventListener('change', handleFileUpload);
         analyzeBtn.addEventListener('click', analyzeContract);
         clearBtn.addEventListener('click', clearForm);
+        calcBtn.addEventListener('click', performCalculation);
+
+        // ВКЛАДКИ
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabName = btn.getAttribute('data-tab');
+                switchTab(tabName);
+            });
+        });
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
 
         // --- ФУНКЦИИ ЗАГРУЗКИ ФАЙЛОВ ---
         async function extractDocxText(arrayBuffer) {
@@ -443,6 +681,8 @@
             tableBody.innerHTML = '';
             resultsSection.classList.remove('active');
             errorMessage.style.display = 'none';
+            CURRENT_CRITERIA = null;
+            calcResult.classList.remove('active');
         }
 
         async function loadPromptTemplate() {
@@ -470,6 +710,7 @@
 
             try {
                 const resultsArray = await queryDeepSeek(text);
+                CURRENT_CRITERIA = resultsArray; // Сохраняем для калькулятора
                 renderTable(resultsArray);
                 resultsSection.classList.add('active');
             } catch (error) {
@@ -491,7 +732,7 @@
                     model: MODEL,
                     messages: [{ role: 'user', content: prompt }],
                     temperature: 0.1,
-                    max_tokens: 2000
+                    max_tokens: 3000
                 })
             });
 
@@ -537,7 +778,6 @@
                 const methodology = escapeHtml(item.methodology || '-');
                 const citation = item.citation || '';
 
-                // Основные ячейки
                 let methodologyCell = `<td>${methodology}`;
                 if (citation) {
                     methodologyCell += `<div class="citation-note">📌 ${escapeHtml(citation)}</div>`;
@@ -552,6 +792,156 @@
                 
                 tableBody.appendChild(row);
             });
+        }
+
+        // --- КАЛЬКУЛЯТОР КОНКУРЕНТНОСТИ ---
+        function performCalculation() {
+            const criterionName = document.getElementById('criterionName').value.trim();
+            const criterionWeight = parseFloat(document.getElementById('criterionWeight').value);
+            const leaderHistoricalDropdown = parseFloat(document.getElementById('leaderHistoricalDropdown').value);
+            const leaderNonCostScore = parseFloat(document.getElementById('leaderNonCostScore').value);
+            const yourNonCostScore = parseFloat(document.getElementById('yourNonCostScore').value);
+            const leaderBasePrice = parseFloat(document.getElementById('leaderBasePrice').value);
+
+            // Валидация
+            if (!criterionName || isNaN(criterionWeight) || isNaN(leaderHistoricalDropdown) || 
+                isNaN(leaderNonCostScore) || isNaN(yourNonCostScore) || isNaN(leaderBasePrice)) {
+                showError('Пожалуйста, заполните все поля корректно');
+                return;
+            }
+
+            if (criterionWeight <= 0 || criterionWeight > 100) {
+                showError('Вес должен быть от 1 до 100');
+                return;
+            }
+
+            if (leaderBasePrice <= 0) {
+                showError('Цена должна быть положительной');
+                return;
+            }
+
+            // РАСЧЁТ
+
+            // 1. Текущая ситуация
+            // Считаем, что баллы за цену рассчитываются по формуле: (min_price / current_price) * max_score
+            // Если лидер обычно снижает на 3%, его текущая цена: leaderBasePrice * (1 - 0.03) = leaderBasePrice * 0.97
+            const leaderCurrentPrice = leaderBasePrice * (1 - leaderHistoricalDropdown / 100);
+            
+            // Предположим, что максимальный балл за цену = 100, остальное распределяется на нестоимостные критерии
+            // Нам нужно рассчитать, как баллы распределяются
+
+            // Логика: если вес нестоимостного критерия W%, то его максимальный балл = W/100 * 100 = W баллов
+            // (в логике закупки часто применяют взвешивание баллов)
+
+            // Если нестоимостный критерий = 40% веса, то его макс 40 баллов (для простоты считаем шкалу 0-100 в абсолютных баллах)
+
+            // Пусть лидер получает по этому критерию 95 баллов, ваша компания 70 баллов
+            // При разном падении цены у лидера баллы за цену меняются
+
+            // Сценарий: находим, при каком падении цены лидера баллы сравняются
+
+            // Формула баллов за цену (типовая для 44-ФЗ): Оцена_i = (Мин_цена / Цена_i) * 100
+            // Если вес цены 60%, то итоговый балл за цену = 60
+
+            // Можем предположить, что есть стоимостный критерий (например 60%) и нестоимостный (40%)
+            const costWeight = 100 - criterionWeight; // Предполагаем, что остальное - стоимостные критерии
+
+            // Баллы за цену рассчитываются так: (min_price / our_price) * costWeight
+            // Нужно найти нашу цену и цену лидера при которых общие баллы равны
+
+            // Упрощённо: пусть наша текущая цена = leaderBasePrice (как базовая)
+            // Находим, при каком падении цены лидера его общие баллы = нашим общим баллам
+
+            // Текущее распределение:
+            // Лидер: баллы_лидера_по_критерию + баллы_за_цену_лидера = общий балл лидера
+            // Мы: баллы_нашие_по_критерию + баллы_за_цену_нашу = общий балл наш
+
+            // Если обе цены = базовой, то баллы за цену одинаковые
+            // Баллы лидера (сейчас) = 95 (по нестоим. крит.) + 60 (по цене) = 155 (условно)
+            // Баллы наши = 70 + 60 = 130
+
+            // Если лидер снизит цену на X%, его цена = base * (1 - X/100)
+            // Баллы за его цену = (base / (base * (1 - X/100))) * costWeight = (1 / (1 - X/100)) * costWeight
+
+            // Находим X при котором:
+            // leaderNonCostScore + (1 / (1 - X/100)) * costWeight = yourNonCostScore + costWeight
+
+            // (1 / (1 - X/100)) * costWeight - costWeight = yourNonCostScore - leaderNonCostScore
+            // costWeight * (1 / (1 - X/100) - 1) = yourNonCostScore - leaderNonCostScore
+            // (1 / (1 - X/100) - 1) = (yourNonCostScore - leaderNonCostScore) / costWeight
+            // (1 - (1 - X/100)) / (1 - X/100) = (yourNonCostScore - leaderNonCostScore) / costWeight
+            // (X/100) / (1 - X/100) = (yourNonCostScore - leaderNonCostScore) / costWeight
+
+            // Решение для X:
+            const scoreDiff = yourNonCostScore - leaderNonCostScore;
+            if (scoreDiff >= 0) {
+                // Мы лучше по нестоимостным критериям, нам не нужно снижать цену чтобы сравняться
+                calcResultContent.innerHTML = `
+                    <div class="result-line">
+                        <strong>Ваша позиция:</strong> Вы лучше лидера по нестоимостным критериям на <strong>${scoreDiff.toFixed(1)} баллов</strong>.
+                    </div>
+                    <div class="result-line">
+                        Вам не нужно снижать цену ниже лидера — вы выиграете даже при равных или больших ценах.
+                    </div>
+                    <div class="result-highlight">
+                        ✅ Рекомендация: стимулируйте качество (нестоимостные критерии)
+                    </div>
+                `;
+            } else {
+                // Нас хуже, нужно рассчитать падение цены
+                // costWeight * (X/100) / (1 - X/100) = abs(scoreDiff)
+                // (X/100) / (1 - X/100) = abs(scoreDiff) / costWeight
+                // Пусть Y = X/100
+                // Y / (1 - Y) = abs(scoreDiff) / costWeight
+                // Y = (1 - Y) * abs(scoreDiff) / costWeight
+                // Y = abs(scoreDiff) / costWeight - Y * abs(scoreDiff) / costWeight
+                // Y * (1 + abs(scoreDiff) / costWeight) = abs(scoreDiff) / costWeight
+                // Y = (abs(scoreDiff) / costWeight) / (1 + abs(scoreDiff) / costWeight)
+
+                const ratio = Math.abs(scoreDiff) / costWeight;
+                const Y = ratio / (1 + ratio);
+                const requiredPriceDrop = Y * 100;
+
+                // Рассчитываем нашу цену для сравнения
+                const ourBreakEvenPrice = leaderBasePrice / (1 + Y);
+
+                calcResultContent.innerHTML = `
+                    <div class="result-line">
+                        <strong>Анализ конкурентности по критерию:</strong> "${escapeHtml(criterionName)}"
+                    </div>
+                    <div class="result-line">Вес критерия: <strong>${criterionWeight}%</strong>, Стоимостная часть: <strong>${costWeight}%</strong></div>
+                    
+                    <div class="result-line" style="margin-top: 16px;">
+                        <strong>Текущая позиция лидера:</strong>
+                        <div style="margin-left: 16px; margin-top: 8px;">
+                            - Базовая цена: <strong>${leaderBasePrice.toLocaleString('ru-RU')} руб.</strong>
+                            <br>- Историческое падение: <strong>${leaderHistoricalDropdown}%</strong>
+                            <br>- Текущая цена: <strong>${leaderCurrentPrice.toLocaleString('ru-RU', {maximumFractionDigits: 0})} руб.</strong>
+                            <br>- Баллы по нестоимостным критериям: <strong>${leaderNonCostScore}</strong>
+                        </div>
+                    </div>
+
+                    <div class="result-line" style="margin-top: 16px;">
+                        <strong>Ваша позиция:</strong>
+                        <div style="margin-left: 16px; margin-top: 8px;">
+                            - Ваши баллы по нестоимостным критериям: <strong>${yourNonCostScore}</strong>
+                            <br>- Разница баллов: <strong>-${Math.abs(scoreDiff).toFixed(1)}</strong> (вы отстаёте)
+                        </div>
+                    </div>
+
+                    <div class="result-highlight">
+                        💡 Для сравнения баллов с лидером при его историческом падении ${leaderHistoricalDropdown}% — 
+                        <br>вам нужно снизить цену на <strong>${requiredPriceDrop.toFixed(2)}%</strong>
+                        <br>Ваша цена должна быть: <strong>${ourBreakEvenPrice.toLocaleString('ru-RU', {maximumFractionDigits: 0})} руб.</strong>
+                    </div>
+
+                    <div class="result-line" style="margin-top: 16px;">
+                        <strong>Вывод:</strong> Если вы снизите цену на ${requiredPriceDrop.toFixed(1)}%, то получите такое же количество баллов, что и лидер (при его историческом падении ${leaderHistoricalDropdown}%).
+                    </div>
+                `;
+            }
+
+            calcResult.classList.add('active');
         }
 
         function showError(message) {
