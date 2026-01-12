@@ -1,1052 +1,697 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Анализатор критериев оценки и конкурентности</title>
-    <script src="https://cdn.jsdelivr.net/npm/jszip@3/dist/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-    <style>
-        :root {
-            --color-primary: #208C8D;
-            --color-bg: #FCFCF9;
-            --color-surface: #FFFFFF;
-            --color-text: #134252;
-            --color-text-secondary: #626C7C;
-            --color-border: #E0E0E0;
-            --color-error: #C0152F;
-            --color-success: #208C8D;
-            --color-warning: #A84B2F;
-            --radius: 8px;
-            --shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--color-bg);
-            color: var(--color-text);
-            line-height: 1.5;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        header {
-            margin-bottom: 30px;
-            text-align: center;
-        }
-
-        h1 {
-            font-size: 28px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .subtitle {
-            color: var(--color-text-secondary);
-            font-size: 14px;
-        }
-
-        .input-section {
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius);
-            padding: 24px;
-            margin-bottom: 24px;
-            box-shadow: var(--shadow);
-        }
-
-        .form-group {
-            margin-bottom: 16px;
-        }
-
-        label {
-            display: block;
-            font-weight: 500;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-
-        textarea {
-            width: 100%;
-            min-height: 200px;
-            padding: 12px;
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius);
-            font-family: monospace;
-            font-size: 13px;
-            resize: vertical;
-            color: var(--color-text);
-            background: var(--color-bg);
-        }
-
-        textarea:focus {
-            outline: none;
-            border-color: var(--color-primary);
-            box-shadow: 0 0 0 3px rgba(32, 140, 141, 0.1);
-        }
-
-        .file-input-wrapper {
-            position: relative;
-            display: inline-block;
-            cursor: pointer;
-        }
-
-        input[type="file"] {
-            display: none;
-        }
-
-        .file-label {
-            display: inline-block;
-            padding: 10px 16px;
-            background: var(--color-bg);
-            border: 1px dashed var(--color-primary);
-            border-radius: var(--radius);
-            color: var(--color-primary);
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .file-label:hover {
-            background: rgba(32, 140, 141, 0.05);
-        }
-
-        .button-group {
-            display: flex;
-            gap: 12px;
-            margin-top: 20px;
-            flex-wrap: wrap;
-        }
-
-        button {
-            padding: 12px 24px;
-            border: none;
-            border-radius: var(--radius);
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 14px;
-        }
-
-        .btn-primary {
-            background: var(--color-primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #1B7577;
-        }
-
-        .btn-primary:disabled {
-            background: #C0C0C0;
-            cursor: not-allowed;
-        }
-
-        .btn-secondary {
-            background: var(--color-bg);
-            border: 1px solid var(--color-border);
-            color: var(--color-text);
-        }
-
-        .btn-secondary:hover {
-            background: #F5F5F5;
-        }
-
-        /* ВКЛАДКИ */
-        .tabs {
-            display: flex;
-            gap: 0;
-            margin-bottom: 20px;
-            border-bottom: 2px solid var(--color-border);
-            flex-wrap: wrap;
-        }
-
-        .tab-button {
-            padding: 12px 20px;
-            background: transparent;
-            border: none;
-            border-bottom: 3px solid transparent;
-            color: var(--color-text-secondary);
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 14px;
-        }
-
-        .tab-button.active {
-            color: var(--color-primary);
-            border-bottom-color: var(--color-primary);
-        }
-
-        .tab-button:disabled {
-            color: #aaa;
-            cursor: not-allowed;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        /* ТАБЛИЦА */
-        .results-section {
-            display: none;
-        }
-
-        .results-section.active {
-            display: block;
-        }
-
-        .results-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 16px;
-            color: var(--color-text);
-        }
-
-        .table-wrapper {
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            overflow-x: auto;
-            margin-bottom: 20px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        thead {
-            background: rgba(32, 140, 141, 0.08);
-        }
-
-        th {
-            padding: 14px;
-            text-align: left;
-            font-weight: 600;
-            font-size: 14px;
-            color: var(--color-text);
-            border-bottom: 2px solid var(--color-border);
-        }
-
-        td {
-            padding: 14px;
-            border-bottom: 1px solid var(--color-border);
-            color: var(--color-text-secondary);
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        tbody tr:hover {
-            background: rgba(32, 140, 141, 0.03);
-        }
-
-        .citation-note {
-            font-size: 12px;
-            color: var(--color-text-secondary);
-            font-style: italic;
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid rgba(32, 140, 141, 0.2);
-        }
-
-        /* ФОРМА ВВОДА ДАННЫХ */
-        .data-input-section {
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius);
-            padding: 24px;
-            margin-bottom: 20px;
-            box-shadow: var(--shadow);
-        }
-
-        .section-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 16px;
-            color: var(--color-text);
-            padding-bottom: 12px;
-            border-bottom: 2px solid var(--color-border);
-        }
-
-        .input-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 24px;
-        }
-
-        .input-field {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .input-field label {
-            font-size: 13px;
-            font-weight: 600;
-            margin-bottom: 6px;
-            color: var(--color-text);
-        }
-
-        .input-field input {
-            padding: 10px 12px;
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius);
-            font-size: 14px;
-            color: var(--color-text);
-        }
-
-        .input-field input:focus {
-            outline: none;
-            border-color: var(--color-primary);
-            box-shadow: 0 0 0 3px rgba(32, 140, 141, 0.1);
-        }
-
-        .input-help {
-            font-size: 12px;
-            color: var(--color-text-secondary);
-            margin-top: 4px;
-            font-style: italic;
-        }
-
-        /* РЕЗУЛЬТАТЫ РАСЧЁТОВ */
-        .calc-results {
-            background: rgba(32, 140, 141, 0.08);
-            border-left: 4px solid var(--color-primary);
-            border-radius: var(--radius);
-            padding: 20px;
-            margin-top: 20px;
-            display: none;
-        }
-
-        .calc-results.active {
-            display: block;
-        }
-
-        .result-block {
-            margin-bottom: 20px;
-        }
-
-        .result-block-title {
-            font-weight: 600;
-            color: var(--color-primary);
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-
-        .result-item {
-            padding: 8px 0;
-            font-size: 14px;
-            color: var(--color-text);
-        }
-
-        .result-highlight {
-            background: rgba(32, 140, 141, 0.15);
-            padding: 12px;
-            border-radius: 4px;
-            margin-top: 12px;
-            font-weight: 600;
-            color: var(--color-primary);
-            font-size: 15px;
-            text-align: center;
-        }
-
-        .loading {
-            display: inline-block;
-            margin-left: 8px;
-        }
-
-        .spinner {
-            border: 2px solid var(--color-border);
-            border-top: 2px solid var(--color-primary);
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            animation: spin 0.8s linear infinite;
-            display: inline-block;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .error-message {
-            background: rgba(192, 21, 47, 0.1);
-            border: 1px solid var(--color-error);
-            color: var(--color-error);
-            padding: 16px;
-            border-radius: var(--radius);
-            margin-bottom: 16px;
-        }
-
-        .success-message {
-            background: rgba(32, 140, 141, 0.1);
-            border: 1px solid var(--color-primary);
-            color: var(--color-text);
-            padding: 16px;
-            border-radius: var(--radius);
-            margin-bottom: 16px;
-        }
-
-        .file-name {
-            margin-top: 8px;
-            font-size: 13px;
-            color: var(--color-text-secondary);
-        }
-
-        .footer {
-            margin-top: 40px;
-            text-align: center;
-            font-size: 13px;
-            color: var(--color-text-secondary);
-        }
-
-        .footer a {
-            color: var(--color-primary);
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .footer a:hover {
-            text-decoration: underline;
-        }
-
-        @media (max-width: 768px) {
-            .button-group {
-                flex-direction: column;
-            }
-
-            button {
-                width: 100%;
-            }
-
-            h1 {
-                font-size: 22px;
-            }
-
-            table {
-                font-size: 12px;
-            }
-
-            th, td {
-                padding: 10px;
-            }
-
-            .input-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .tabs {
-                flex-wrap: wrap;
-            }
-
-            .tab-button {
-                padding: 10px 12px;
-                font-size: 12px;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Натальная карта и рекомендации по бизнесу</title>
+  <style>
+    :root {
+      --color-primary: #5b63ff;
+      --color-bg: #f6f7fb;
+      --color-surface: #ffffff;
+      --color-text: #1a1f36;
+      --color-text-secondary: #5c647a;
+      --color-border: #e3e7f2;
+      --color-accent: #ffb347;
+      --radius: 14px;
+      --shadow: 0 8px 30px rgba(14, 20, 46, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      gap: 24px;
+    }
+
+    header {
+      text-align: center;
+      padding: 12px 0 8px;
+    }
+
+    h1 {
+      font-size: clamp(24px, 4vw, 34px);
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: var(--color-text-secondary);
+      font-size: 15px;
+    }
+
+    .card {
+      background: var(--color-surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--color-border);
+      padding: 24px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    input,
+    select,
+    textarea {
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 15px;
+      background: #fbfcff;
+      color: var(--color-text);
+    }
+
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(91, 99, 255, 0.15);
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    button {
+      padding: 12px 18px;
+      border-radius: 999px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .btn-primary {
+      background: var(--color-primary);
+      color: white;
+      box-shadow: 0 10px 20px rgba(91, 99, 255, 0.25);
+    }
+
+    .btn-secondary {
+      background: #eef1ff;
+      color: var(--color-primary);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .disclaimer {
+      background: rgba(255, 179, 71, 0.2);
+      border: 1px dashed rgba(255, 179, 71, 0.6);
+      padding: 14px 16px;
+      border-radius: 12px;
+      color: #7a4b00;
+      font-size: 13px;
+    }
+
+    .results {
+      display: grid;
+      gap: 20px;
+    }
+
+    .result-section h3 {
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+
+    .pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pill {
+      background: #f0f2ff;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 14px;
+      color: var(--color-primary);
+      font-weight: 600;
+    }
+
+    .chart-wrap {
+      display: grid;
+      place-items: center;
+      margin-top: 12px;
+    }
+
+    .chart-meta {
+      display: grid;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--color-text-secondary);
+    }
+
+    .house-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .house-card {
+      background: #f7f8ff;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+
+    .house-card strong {
+      display: block;
+      color: var(--color-text);
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .tag {
+      background: #ffffff;
+      border-radius: 999px;
+      padding: 6px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--color-border);
+      font-size: 13px;
+    }
+
+    .tag span {
+      font-weight: 600;
+      color: var(--color-primary);
+    }
+
+    .chart-svg text {
+      font-size: 10px;
+      fill: #3e4666;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 10px;
+    }
+
+    .timeline-item {
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--color-border);
+      background: #fbfcff;
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 16px;
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>📊 Анализатор критериев и конкурентности</h1>
-            <p class="subtitle">Полный расчёт нестоимостных критериев и паритета баллов</p>
-        </header>
+  <div class="container">
+    <header>
+      <h1>🌌 Натальная карта + бизнес-рекомендации</h1>
+      <p class="subtitle">Введите данные рождения, чтобы получить визуальную карту и структурированный отчет.</p>
+    </header>
 
-        <div class="input-section">
-            <div class="form-group">
-                <label for="contractText">Порядок оценки заявок (документ):</label>
-                <textarea 
-                    id="contractText" 
-                    placeholder="Вставьте текст документа или загрузите файл (.txt, .docx, .pdf)..."
-                ></textarea>
-                <div class="file-input-wrapper">
-                    <label for="fileInput" class="file-label">📁 Загрузить файл (.txt, .docx, .pdf)</label>
-                    <input type="file" id="fileInput" accept=".txt,.docx,.pdf">
-                </div>
-                <div class="file-name" id="fileName"></div>
-            </div>
-
-            <div id="errorMessage" class="error-message" style="display: none;"></div>
-
-            <div class="button-group">
-                <button class="btn-primary" id="analyzeBtn">
-                    🔍 Анализировать документ
-                </button>
-                <button class="btn-secondary" id="clearBtn">
-                    Очистить всё
-                </button>
-            </div>
+    <section class="card">
+      <div class="grid grid-2">
+        <div class="field">
+          <label for="fullName">Имя</label>
+          <input id="fullName" type="text" placeholder="Например, Анна" />
         </div>
-
-        <!-- ВКЛАДКИ -->
-        <div id="resultsSection" class="results-section">
-            <div class="tabs">
-                <button class="tab-button active" data-tab="table">📋 Таблица критериев</button>
-                <button class="tab-button" id="dataTabBtn" data-tab="input-data">📊 Ввод данных</button>
-                <button class="tab-button" id="calcTabBtn" data-tab="calculator">🧮 Результаты расчёта</button>
-            </div>
-
-            <!-- ВКЛ. 1: ТАБЛИЦА КРИТЕРИЕВ -->
-            <div id="table" class="tab-content active">
-                <div class="results-title">✅ Критерии оценки:</div>
-                <div class="table-wrapper">
-                    <table id="resultsTable">
-                        <thead>
-                            <tr>
-                                <th>Критерий оценки</th>
-                                <th>Вес (%)</th>
-                                <th>Методика оценки</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tableBody">
-                            <!-- Строки сгенерируются здесь -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- ВКЛ. 2: ВВОД ДАННЫХ -->
-            <div id="input-data" class="tab-content">
-                <div class="data-input-section">
-                    <div class="section-title">Данные вашей компании</div>
-                    <div id="yourDataInputs" class="input-grid">
-                        <!-- Поля будут сгенерированы динамически -->
-                    </div>
-                </div>
-
-                <div class="data-input-section">
-                    <div class="section-title">Данные лидера рынка</div>
-                    <div id="leaderDataInputs" class="input-grid">
-                        <!-- Поля будут сгенерированы динамически -->
-                    </div>
-                </div>
-
-                <div class="data-input-section">
-                    <div class="section-title">Дополнительные параметры</div>
-                    <div class="input-grid">
-                        <div class="input-field">
-                            <label for="historicalDropdown">Историческое падение цены лидера (%)</label>
-                            <input type="number" id="historicalDropdown" placeholder="Например: 3" min="0" max="100" step="0.1">
-                            <div class="input-help">На сколько % в среднем лидер снижает начальную цену</div>
-                        </div>
-                        <div class="input-field">
-                            <label for="leaderBasePrice">Базовая начальная цена лидера (руб.)</label>
-                            <input type="number" id="leaderBasePrice" placeholder="Например: 1000000" min="0">
-                            <div class="input-help">Начальная цена их предложения</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="button-group" style="margin-top: 20px;">
-                    <button class="btn-primary" id="calcDataBtn">
-                        📊 Рассчитать баллы и конкурентность
-                    </button>
-                </div>
-
-                <div id="dataSuccess" class="success-message" style="display: none;"></div>
-            </div>
-
-            <!-- ВКЛ. 3: РЕЗУЛЬТАТЫ РАСЧЁТОВ -->
-            <div id="calculator" class="tab-content">
-                <div id="calcResults" class="calc-results">
-                    <!-- Результаты будут вставлены здесь -->
-                </div>
-            </div>
+        <div class="field">
+          <label for="birthDate">Дата рождения</label>
+          <input id="birthDate" type="date" />
         </div>
-    </div>
+        <div class="field">
+          <label for="birthTime">Время рождения</label>
+          <input id="birthTime" type="time" />
+        </div>
+        <div class="field">
+          <label for="timezone">Часовой пояс</label>
+          <select id="timezone">
+            <option value="+03:00">Москва (UTC+3)</option>
+            <option value="+02:00">UTC+2</option>
+            <option value="+01:00">UTC+1</option>
+            <option value="+00:00">UTC+0</option>
+            <option value="-01:00">UTC-1</option>
+            <option value="-02:00">UTC-2</option>
+            <option value="-03:00">UTC-3</option>
+            <option value="+04:00">UTC+4</option>
+            <option value="+05:00">UTC+5</option>
+            <option value="+06:00">UTC+6</option>
+            <option value="+07:00">UTC+7</option>
+            <option value="+08:00">UTC+8</option>
+            <option value="+09:00">UTC+9</option>
+            <option value="+10:00">UTC+10</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="birthCity">Город рождения</label>
+          <input id="birthCity" type="text" placeholder="Например, Санкт-Петербург" />
+        </div>
+        <div class="field">
+          <label for="birthCountry">Страна</label>
+          <input id="birthCountry" type="text" placeholder="Например, Россия" />
+        </div>
+      </div>
 
-    <footer class="footer">
-        Разработано в лаборатории
-        <a href="https://t.me/tickettotender" target="_blank" rel="noopener noreferrer">
-            тендеры ex machina
-        </a>
-    </footer>
+      <div class="grid grid-2" style="margin-top: 16px;">
+        <div class="field">
+          <label for="businessArea">Сфера бизнеса</label>
+          <input id="businessArea" type="text" placeholder="Например, IT-услуги, ритейл" />
+        </div>
+        <div class="field">
+          <label for="role">Роль в бизнесе</label>
+          <select id="role">
+            <option value="founder">Основатель</option>
+            <option value="executive">Руководитель</option>
+            <option value="expert">Эксперт / консультант</option>
+            <option value="creative">Креативный лидер</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="goal">Бизнес-цель</label>
+          <input id="goal" type="text" placeholder="Например, масштабирование, привлечение инвестиций" />
+        </div>
+        <div class="field">
+          <label for="risk">Допустимый риск</label>
+          <select id="risk">
+            <option value="low">Низкий</option>
+            <option value="medium" selected>Средний</option>
+            <option value="high">Высокий</option>
+          </select>
+        </div>
+      </div>
 
-    <script>
-        // Настройка worker для PDF.js
-        if (typeof pdfjsLib !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-        }
+      <div class="field" style="margin-top: 16px;">
+        <label for="notes">Дополнительные данные</label>
+        <textarea id="notes" placeholder="Например: важные даты, пожелания, контекст бизнеса"></textarea>
+      </div>
 
-        const API_KEY = 'sk-uQ_fcf3qvOFDHiM7u5IamQ';
-        const API_URL = 'https://litellm.tokengate.ru/v1/chat/completions';
-        const MODEL = 'deepseek/deepseek-chat';
-        const PROMPT_URL = './prompt.txt';
-        
-        let PROMPT_TEMPLATE_CACHE = null;
-        let CURRENT_CRITERIA = null;
-        let FORM_FIELDS = {}; // Динамические поля формы
+      <div class="actions">
+        <button class="btn-primary" id="buildChart">Построить натальную карту</button>
+        <button class="btn-secondary" id="resetForm">Сбросить форму</button>
+      </div>
 
-        const contractText = document.getElementById('contractText');
-        const fileInput = document.getElementById('fileInput');
-        const analyzeBtn = document.getElementById('analyzeBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const resultsSection = document.getElementById('resultsSection');
-        const tableBody = document.getElementById('tableBody');
-        const errorMessage = document.getElementById('errorMessage');
-        const fileName = document.getElementById('fileName');
-        const calcDataBtn = document.getElementById('calcDataBtn');
-        const calcResults = document.getElementById('calcResults');
-        const dataSuccess = document.getElementById('dataSuccess');
+      <p class="disclaimer" style="margin-top: 16px;">
+        ⚠️ Этот инструмент генерирует вдохновляющий астрологический отчет на основе введенных данных и упрощенной модели.
+        Он не является научной консультацией и не заменяет профессиональные решения.
+      </p>
+    </section>
 
-        fileInput.addEventListener('change', handleFileUpload);
-        analyzeBtn.addEventListener('click', analyzeContract);
-        clearBtn.addEventListener('click', clearForm);
-        calcDataBtn.addEventListener('click', performCalculation);
+    <section class="card results" id="results" style="display: none;">
+      <div class="result-section">
+        <h3>🧭 Основные акценты карты</h3>
+        <div class="pill-list" id="keyPills"></div>
+      </div>
 
-        // УПРАВЛЕНИЕ ВКЛАДКАМИ
-        document.querySelectorAll('.tab-button').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const tabName = btn.getAttribute('data-tab');
-                switchTab(tabName);
-            });
-        });
+      <div class="result-section">
+        <h3>🌐 Натальная карта</h3>
+        <div class="chart-wrap">
+          <svg class="chart-svg" id="chart" width="360" height="360" viewBox="0 0 360 360" aria-label="Натальная карта">
+            <circle cx="180" cy="180" r="150" fill="#fff" stroke="#d8dff5" stroke-width="2" />
+            <circle cx="180" cy="180" r="110" fill="none" stroke="#e7ecfb" stroke-width="2" />
+            <circle cx="180" cy="180" r="70" fill="none" stroke="#f0f3ff" stroke-width="2" />
+            <g id="houseLines"></g>
+            <g id="planetMarkers"></g>
+            <circle cx="180" cy="180" r="4" fill="#5b63ff" />
+          </svg>
+        </div>
+        <div class="chart-meta" id="chartMeta"></div>
+      </div>
 
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
+      <div class="result-section">
+        <h3>💼 Бизнес-портрет</h3>
+        <div id="businessProfile"></div>
+      </div>
 
-        // --- ФУНКЦИИ ЗАГРУЗКИ ФАЙЛОВ ---
-        async function extractDocxText(arrayBuffer) {
-            try {
-                const zip = await JSZip.loadAsync(arrayBuffer);
-                const xmlContent = await zip.file('word/document.xml').async('text');
-                const text = xmlContent.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-                return text;
-            } catch (error) {
-                throw new Error('Не удалось распарсить DOCX: ' + error.message);
-            }
-        }
+      <div class="result-section">
+        <h3>🚀 Рекомендации по развитию</h3>
+        <div class="timeline" id="recommendations"></div>
+      </div>
 
-        async function extractPdfText(arrayBuffer) {
-            try {
-                if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js не загрузился');
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                let fullText = '';
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    fullText += textContent.items.map(item => item.str).join(' ') + ' ';
-                }
-                return fullText.trim();
-            } catch (error) {
-                throw new Error('Не удалось распарсить PDF: ' + error.message);
-            }
-        }
+      <div class="result-section">
+        <h3>🏠 Дома и сферы жизни</h3>
+        <div class="house-grid" id="houses"></div>
+      </div>
+    </section>
+  </div>
 
-        async function handleFileUpload(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            fileName.textContent = `Загружаю: ${file.name}...`;
-            errorMessage.style.display = 'none';
-            try {
-                let text = '';
-                if (file.name.endsWith('.docx')) {
-                    if (typeof JSZip === 'undefined') throw new Error('Ждем загрузку JSZip...');
-                    text = await extractDocxText(await file.arrayBuffer());
-                } else if (file.name.endsWith('.pdf')) {
-                    text = await extractPdfText(await file.arrayBuffer());
-                } else {
-                    text = await file.text();
-                }
-                contractText.value = text;
-                fileName.textContent = `✅ Файл загружен: ${file.name}`;
-            } catch (error) {
-                fileName.textContent = '';
-                showError(`Ошибка загрузки: ${error.message}`);
-            }
-        }
+  <script>
+    const buildButton = document.getElementById("buildChart");
+    const resetButton = document.getElementById("resetForm");
+    const resultsSection = document.getElementById("results");
+    const keyPills = document.getElementById("keyPills");
+    const chartMeta = document.getElementById("chartMeta");
+    const houseLines = document.getElementById("houseLines");
+    const planetMarkers = document.getElementById("planetMarkers");
+    const businessProfile = document.getElementById("businessProfile");
+    const recommendations = document.getElementById("recommendations");
+    const houses = document.getElementById("houses");
 
-        function clearForm() {
-            contractText.value = '';
-            fileInput.value = '';
-            fileName.textContent = '';
-            tableBody.innerHTML = '';
-            resultsSection.classList.remove('active');
-            errorMessage.style.display = 'none';
-            dataSuccess.style.display = 'none';
-            CURRENT_CRITERIA = null;
-            FORM_FIELDS = {};
-            document.getElementById('yourDataInputs').innerHTML = '';
-            document.getElementById('leaderDataInputs').innerHTML = '';
-            calcResults.innerHTML = '';
-            
-            // Отключаем вкладки
-            document.getElementById('dataTabBtn').disabled = true;
-            document.getElementById('calcTabBtn').disabled = true;
-        }
+    const SIGNS = [
+      "Овен",
+      "Телец",
+      "Близнецы",
+      "Рак",
+      "Лев",
+      "Дева",
+      "Весы",
+      "Скорпион",
+      "Стрелец",
+      "Козерог",
+      "Водолей",
+      "Рыбы",
+    ];
 
-        async function loadPromptTemplate() {
-            if (PROMPT_TEMPLATE_CACHE) return PROMPT_TEMPLATE_CACHE;
-            try {
-                const resp = await fetch(PROMPT_URL, { cache: 'no-store' });
-                if (!resp.ok) throw new Error(`Ошибка загрузки prompt.txt: ${resp.status}`);
-                PROMPT_TEMPLATE_CACHE = await resp.text();
-                return PROMPT_TEMPLATE_CACHE;
-            } catch (e) {
-                throw new Error('Не удалось найти prompt.txt');
-            }
-        }
+    const PLANETS = [
+      { name: "Солнце", symbol: "☉" },
+      { name: "Луна", symbol: "☽" },
+      { name: "Меркурий", symbol: "☿" },
+      { name: "Венера", symbol: "♀" },
+      { name: "Марс", symbol: "♂" },
+      { name: "Юпитер", symbol: "♃" },
+      { name: "Сатурн", symbol: "♄" },
+      { name: "Уран", symbol: "♅" },
+      { name: "Нептун", symbol: "♆" },
+      { name: "Плутон", symbol: "♇" },
+    ];
 
-        async function analyzeContract() {
-            const text = contractText.value.trim();
-            if (!text) { showError('Введите или загрузите текст'); return; }
+    const BUSINESS_ARCHETYPES = {
+      founder: {
+        strengths: [
+          "инициативность",
+          "видение рынка",
+          "быстрое принятие решений",
+        ],
+        focus: "создание масштабируемой модели и ядра команды",
+      },
+      executive: {
+        strengths: ["управление процессами", "операционная устойчивость", "делегирование"],
+        focus: "оптимизация финансового потока и стабильность бизнеса",
+      },
+      expert: {
+        strengths: ["экспертиза", "личный бренд", "глубина анализа"],
+        focus: "продуктовая упаковка знаний и развитие консалтинга",
+      },
+      creative: {
+        strengths: ["креатив", "стратегические инсайты", "эмпатия"],
+        focus: "развитие уникального позиционирования и коммуникации",
+      },
+    };
 
-            analyzeBtn.disabled = true;
-            errorMessage.style.display = 'none';
-            resultsSection.classList.remove('active');
-            
-            const originalButtonText = analyzeBtn.innerHTML;
-            analyzeBtn.innerHTML = 'Анализирую...<span class="loading"><span class="spinner"></span></span>';
+    function hashString(value) {
+      let hash = 0;
+      for (let i = 0; i < value.length; i += 1) {
+        hash = (hash << 5) - hash + value.charCodeAt(i);
+        hash |= 0;
+      }
+      return Math.abs(hash);
+    }
 
-            try {
-                const resultsArray = await queryDeepSeek(text);
-                CURRENT_CRITERIA = resultsArray;
-                renderTable(resultsArray);
-                generateDynamicFields(resultsArray);
-                resultsSection.classList.add('active');
-                
-                // Включаем остальные вкладки
-                document.getElementById('dataTabBtn').disabled = false;
-                document.getElementById('calcTabBtn').disabled = false;
-                
-            } catch (error) {
-                showError('Ошибка: ' + error.message);
-            } finally {
-                analyzeBtn.disabled = false;
-                analyzeBtn.innerHTML = originalButtonText;
-            }
-        }
+    function toDegrees(hash, index) {
+      return (hash * (index + 3) * 37) % 360;
+    }
 
-        async function queryDeepSeek(contractText) {
-            const template = await loadPromptTemplate();
-            const prompt = template.replace('{{CONTRACT_TEXT}}', contractText);
+    function degreeToSign(degree) {
+      const signIndex = Math.floor(degree / 30) % 12;
+      const degreeInSign = Math.floor(degree % 30);
+      return { sign: SIGNS[signIndex], degree: degreeInSign };
+    }
 
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
-                body: JSON.stringify({
-                    model: MODEL,
-                    messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.1,
-                    max_tokens: 3000
-                })
-            });
+    function buildHouseLines() {
+      houseLines.innerHTML = "";
+      for (let i = 0; i < 12; i += 1) {
+        const angle = (i * 30 * Math.PI) / 180;
+        const x = 180 + 150 * Math.cos(angle);
+        const y = 180 + 150 * Math.sin(angle);
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", "180");
+        line.setAttribute("y1", "180");
+        line.setAttribute("x2", x);
+        line.setAttribute("y2", y);
+        line.setAttribute("stroke", "#eef1ff");
+        line.setAttribute("stroke-width", "2");
+        houseLines.appendChild(line);
+      }
+    }
 
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error?.message || response.statusText);
-            }
+    function renderPlanets(positions) {
+      planetMarkers.innerHTML = "";
+      positions.forEach((planet, index) => {
+        const angle = (planet.degree - 90) * (Math.PI / 180);
+        const radius = 120 - (index % 3) * 18;
+        const x = 180 + radius * Math.cos(angle);
+        const y = 180 + radius * Math.sin(angle);
 
-            const data = await response.json();
-            let content = data.choices[0]?.message?.content?.trim() || '';
-            
-            console.log('API RAW:', content);
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", x);
+        circle.setAttribute("cy", y);
+        circle.setAttribute("r", "10");
+        circle.setAttribute("fill", "#5b63ff");
+        circle.setAttribute("opacity", "0.12");
 
-            const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch) content = jsonMatch[1].trim();
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", x);
+        text.setAttribute("y", y + 3);
+        text.setAttribute("text-anchor", "middle");
+        text.textContent = planet.symbol;
 
-            try {
-                const parsed = JSON.parse(content);
-                if (!Array.isArray(parsed)) {
-                    throw new Error('Ожидается массив критериев');
-                }
-                return parsed;
-            } catch (e) {
-                console.error(e);
-                throw new Error('Ошибка парсинга JSON ответа');
-            }
-        }
+        planetMarkers.appendChild(circle);
+        planetMarkers.appendChild(text);
+      });
+    }
 
-        // --- РЕНДЕРИНГ ТАБЛИЦЫ ---
-        function renderTable(dataArray) {
-            tableBody.innerHTML = '';
+    function renderPills(placements) {
+      keyPills.innerHTML = "";
+      placements.slice(0, 6).forEach((item) => {
+        const pill = document.createElement("div");
+        pill.className = "pill";
+        pill.textContent = `${item.name} в ${item.sign}`;
+        keyPills.appendChild(pill);
+      });
+    }
 
-            if (!dataArray || dataArray.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--color-error);">Критерии не найдены</td></tr>';
-                return;
-            }
+    function renderMeta({ name, date, time, city, country, timezone }) {
+      chartMeta.innerHTML = `
+        <div class="tag">👤 <span>${name || "Профиль"}</span></div>
+        <div class="tag">📍 <span>${city || "Город"}, ${country || "страна"}</span></div>
+        <div class="tag">🕒 <span>${date || "дата"} ${time || "время"} (${timezone})</span></div>
+      `;
+    }
 
-            dataArray.forEach(item => {
-                const row = document.createElement('tr');
-                
-                const criterion = escapeHtml(item.criterion || '-');
-                const weight = escapeHtml(item.weight || '-');
-                const methodology = escapeHtml(item.methodology || '-');
-                const citation = item.citation || '';
+    function renderBusinessProfile({ role, businessArea, goal, risk }, placements) {
+      const archetype = BUSINESS_ARCHETYPES[role];
+      const dominant = placements[0];
+      const support = placements[1];
 
-                let methodologyCell = `<td>${methodology}`;
-                if (citation) {
-                    methodologyCell += `<div class="citation-note">📌 ${escapeHtml(citation)}</div>`;
-                }
-                methodologyCell += '</td>';
+      businessProfile.innerHTML = `
+        <p><strong>Роль:</strong> ${roleLabel(role)}. Ведущий архетип карты — <strong>${dominant.sign}</strong>,
+        усиленный влиянием ${support.name}.</p>
+        <p><strong>Сильные стороны:</strong> ${archetype.strengths.join(", ")}. Это поможет в сфере ${businessArea || "вашего бизнеса"}.</p>
+        <p><strong>Фокус:</strong> ${archetype.focus}. Цель "${goal || "развитие"}" поддерживается стратегическим мышлением.</p>
+        <p><strong>Риск-профиль:</strong> ${riskLabel(risk)} — важно сбалансировать амбиции и устойчивость.</p>
+      `;
+    }
 
-                row.innerHTML = `
-                    <td><strong>${criterion}</strong></td>
-                    <td>${weight}</td>
-                    ${methodologyCell}
-                `;
-                
-                tableBody.appendChild(row);
-            });
-        }
+    function renderRecommendations({ risk }) {
+      const advice = risk === "high"
+        ? [
+            "Сделайте ставку на агрессивный рост и партнерства.",
+            "Тестируйте новые каналы монетизации каждые 4 недели.",
+            "Выделите бюджет на эксперименты и масштабируйте успешные гипотезы.",
+          ]
+        : risk === "low"
+          ? [
+              "Сфокусируйтесь на устойчивости и ликвидности.",
+              "Укрепите основную продуктовую линейку до выхода на новые рынки.",
+              "Настройте регулярный контроль метрик LTV и CAC.",
+            ]
+          : [
+              "Сбалансируйте рост и стабильность через пилотные запуски.",
+              "Создайте прозрачный финмодуль с планом окупаемости.",
+              "Развивайте партнерские продажи и PR-позиционирование.",
+            ];
 
-        // --- ГЕНЕРАЦИЯ ДИНАМИЧЕСКИХ ПОЛЕЙ ФОРМЫ ---
-        function generateDynamicFields(criteria) {
-            const yourDataInputs = document.getElementById('yourDataInputs');
-            const leaderDataInputs = document.getElementById('leaderDataInputs');
-            
-            yourDataInputs.innerHTML = '';
-            leaderDataInputs.innerHTML = '';
-            FORM_FIELDS = {};
+      recommendations.innerHTML = "";
+      advice.forEach((text, index) => {
+        const item = document.createElement("div");
+        item.className = "timeline-item";
+        item.innerHTML = `<strong>Шаг ${index + 1}</strong><p>${text}</p>`;
+        recommendations.appendChild(item);
+      });
+    }
 
-            // Фильтруем только нестоимостные критерии
-            const nonCostCriteria = criteria.filter(c => {
-                const lowerCriterion = c.criterion.toLowerCase();
-                return !lowerCriterion.includes('цена') && !lowerCriterion.includes('стоимость');
-            });
+    function renderHouses(placements) {
+      houses.innerHTML = "";
+      placements.slice(0, 12).forEach((placement, index) => {
+        const card = document.createElement("div");
+        card.className = "house-card";
+        card.innerHTML = `
+          <strong>Дом ${index + 1}</strong>
+          ${placement.name} усиливает темы ${houseTheme(index)}.
+          <br /><em>${placement.sign} · ${placement.degree}°</em>
+        `;
+        houses.appendChild(card);
+      });
+    }
 
-            // Парсим методики и создаём поля ввода
-            nonCostCriteria.forEach(c => {
-                const criterionId = sanitizeId(c.criterion);
-                const methodology = c.methodology.toLowerCase();
+    function roleLabel(role) {
+      switch (role) {
+        case "executive":
+          return "Руководитель";
+        case "expert":
+          return "Эксперт";
+        case "creative":
+          return "Креативный лидер";
+        default:
+          return "Основатель";
+      }
+    }
 
-                // Определяем, какие параметры нужны на основе методики
-                let params = [];
+    function riskLabel(risk) {
+      if (risk === "high") return "высокая готовность к риску";
+      if (risk === "low") return "консервативный подход";
+      return "умеренный баланс";
+    }
 
-                if (methodology.includes('контракт') || methodology.includes('сумма')) {
-                    params.push({ name: 'contractSum', label: 'Сумма контрактов (руб.)' });
-                }
-                if (methodology.includes('опыт') || methodology.includes('год')) {
-                    params.push({ name: 'experience', label: 'Опыт (лет)' });
-                }
-                if (methodology.includes('персонал') || methodology.includes('количество сотрудников')) {
-                    params.push({ name: 'personnel', label: 'Количество сотрудников (чел.)' });
-                }
-                if (methodology.includes('образование') || methodology.includes('квалификация')) {
-                    params.push({ name: 'qualification', label: 'Уровень квалификации (баллы 0-100)' });
-                }
+    function houseTheme(index) {
+      const themes = [
+        "личного бренда",
+        "финансовой устойчивости",
+        "коммуникаций",
+        "команды и культуры",
+        "лидерства",
+        "операционных процессов",
+        "партнерств",
+        "стратегических трансформаций",
+        "экспансии",
+        "карьерного роста",
+        "сообщества",
+        "инноваций",
+      ];
+      return themes[index % themes.length];
+    }
 
-                // Если не распознали параметры - добавляем универсальное поле
-                if (params.length === 0) {
-                    params.push({ name: 'value', label: 'Значение для оценки' });
-                }
+    function buildPlacements(seed) {
+      return PLANETS.map((planet, index) => {
+        const degree = toDegrees(seed, index);
+        const { sign, degree: degreeInSign } = degreeToSign(degree);
+        return {
+          ...planet,
+          degree,
+          sign,
+          degreeInSign,
+        };
+      }).sort((a, b) => b.degree - a.degree);
+    }
 
-                // Создаём поля для вашей компании
-                params.forEach(param => {
-                    const fieldId = `your_${criterionId}_${param.name}`;
-                    const field = document.createElement('div');
-                    field.className = 'input-field';
-                    field.innerHTML = `
-                        <label for="${fieldId}">${c.criterion} — ${param.label}</label>
-                        <input type="number" id="${fieldId}" placeholder="Введите значение" min="0">
-                    `;
-                    yourDataInputs.appendChild(field);
-                    FORM_FIELDS[fieldId] = { criterion: c.criterion, param: param.name, type: 'your', methodology: c.methodology };
-                });
+    function validateForm(data) {
+      const required = [data.birthDate, data.birthTime, data.birthCity, data.birthCountry];
+      return required.every((item) => item && item.trim().length > 0);
+    }
 
-                // Создаём поля для лидера
-                params.forEach(param => {
-                    const fieldId = `leader_${criterionId}_${param.name}`;
-                    const field = document.createElement('div');
-                    field.className = 'input-field';
-                    field.innerHTML = `
-                        <label for="${fieldId}">${c.criterion} — ${param.label} (лидер)</label>
-                        <input type="number" id="${fieldId}" placeholder="Введите значение" min="0">
-                    `;
-                    leaderDataInputs.appendChild(field);
-                    FORM_FIELDS[fieldId] = { criterion: c.criterion, param: param.name, type: 'leader', methodology: c.methodology };
-                });
-            });
-        }
+    buildButton.addEventListener("click", () => {
+      const data = {
+        name: document.getElementById("fullName").value.trim(),
+        birthDate: document.getElementById("birthDate").value,
+        birthTime: document.getElementById("birthTime").value,
+        timezone: document.getElementById("timezone").value,
+        birthCity: document.getElementById("birthCity").value.trim(),
+        birthCountry: document.getElementById("birthCountry").value.trim(),
+        businessArea: document.getElementById("businessArea").value.trim(),
+        role: document.getElementById("role").value,
+        goal: document.getElementById("goal").value.trim(),
+        risk: document.getElementById("risk").value,
+        notes: document.getElementById("notes").value.trim(),
+      };
 
-        function sanitizeId(text) {
-            return text.toLowerCase().replace(/[^a-z0-9]/g, '_');
-        }
+      if (!validateForm(data)) {
+        alert("Пожалуйста, заполните дату, время и место рождения.");
+        return;
+      }
 
-        // --- РАСЧЁТ ---
-        async function performCalculation() {
-            dataSuccess.style.display = 'none';
+      const seed = hashString(
+        `${data.name}-${data.birthDate}-${data.birthTime}-${data.birthCity}-${data.birthCountry}-${data.timezone}`
+      );
 
-            // Собираем данные из формы
-            const formData = {};
-            Object.keys(FORM_FIELDS).forEach(fieldId => {
-                const input = document.getElementById(fieldId);
-                if (input) {
-                    formData[fieldId] = parseFloat(input.value) || 0;
-                }
-            });
+      const placements = buildPlacements(seed);
 
-            // Проверяем что выбраны все обязательные данные
-            const historicalDropdown = parseFloat(document.getElementById('historicalDropdown').value);
-            const leaderBasePrice = parseFloat(document.getElementById('leaderBasePrice').value);
+      buildHouseLines();
+      renderPlanets(placements);
+      renderPills(placements);
+      renderMeta({
+        name: data.name || "Профиль",
+        date: data.birthDate,
+        time: data.birthTime,
+        city: data.birthCity,
+        country: data.birthCountry,
+        timezone: data.timezone,
+      });
+      renderBusinessProfile(data, placements);
+      renderRecommendations(data);
+      renderHouses(placements);
 
-            if (isNaN(historicalDropdown) || isNaN(leaderBasePrice) || leaderBasePrice <= 0) {
-                showError('Пожалуйста, заполните параметры цены (историческое падение и базовая цена лидера)');
-                return;
-            }
+      resultsSection.style.display = "grid";
+      resultsSection.scrollIntoView({ behavior: "smooth" });
+    });
 
-            // Рассчитываем баллы по каждому критерию
-            const results = calculateScores(formData, historicalDropdown, leaderBasePrice);
-
-            // Выводим результаты
-            displayResults(results);
-            
-            dataSuccess.textContent = '✅ Расчёты выполнены успешно';
-            dataSuccess.style.display = 'block';
-
-            // Переходим на вкладку с результатами
-            switchTab('calculator');
-        }
-
-        function calculateScores(formData, historicalDropdown, leaderBasePrice) {
-            // Упрощённая логика расчёта
-            // В реальности нужно парсить методику и применять правильные формулы
-
-            let yourTotalScore = 0;
-            let leaderTotalScore = 0;
-            let criteriaDetails = [];
-
-            CURRENT_CRITERIA.forEach(c => {
-                const criterionId = sanitizeId(c.criterion);
-                const isNonCost = !c.criterion.toLowerCase().includes('цена') && !c.criterion.toLowerCase().includes('стоимость');
-
-                if (isNonCost) {
-                    // Ищем значения в formData
-                    const yourValue = Object.keys(formData).find(k => k.includes(`your_${criterionId}`));
-                    const leaderValue = Object.keys(formData).find(k => k.includes(`leader_${criterionId}`));
-
-                    const yourVal = yourValue ? formData[yourValue] : 0;
-                    const leaderVal = leaderValue ? formData[leaderValue] : 0;
-
-                    // Базовый расчёт: нормализуем к 100 баллам
-                    const maxVal = Math.max(yourVal, leaderVal);
-                    const yourScore = maxVal > 0 ? (yourVal / maxVal) * 100 : 0;
-                    const leaderScore = maxVal > 0 ? (leaderVal / maxVal) * 100 : 0;
-
-                    const weight = parseFloat(c.weight) || 0;
-                    const weightedYourScore = (yourScore / 100) * weight;
-                    const weightedLeaderScore = (leaderScore / 100) * weight;
-
-                    yourTotalScore += weightedYourScore;
-                    leaderTotalScore += weightedLeaderScore;
-
-                    criteriaDetails.push({
-                        name: c.criterion,
-                        weight: weight,
-                        yourValue: yourVal,
-                        leaderValue: leaderVal,
-                        yourScore: yourScore.toFixed(1),
-                        leaderScore: leaderScore.toFixed(1),
-                        methodology: c.methodology
-                    });
-                }
-            });
-
-            // Теперь расчитаем паритет цены
-            const leaderCurrentPrice = leaderBasePrice * (1 - historicalDropdown / 100);
-            const costWeight = 100 - (yourTotalScore + leaderTotalScore) / 2; // Упрощённо
-
-            // Находим падение цены для паритета
-            const scoreDiff = leaderTotalScore - yourTotalScore;
-            let requiredPriceDrop = 0;
-
-            if (scoreDiff > 0 && costWeight > 0) {
-                const ratio = Math.abs(scoreDiff) / costWeight;
-                const Y = ratio / (1 + ratio);
-                requiredPriceDrop = Y * 100;
-            }
-
-            const ourBreakEvenPrice = leaderBasePrice / (1 + requiredPriceDrop / 100);
-
-            return {
-                criteria: criteriaDetails,
-                yourTotalNonCostScore: yourTotalScore.toFixed(1),
-                leaderTotalNonCostScore: leaderTotalScore.toFixed(1),
-                leaderCurrentPrice: leaderCurrentPrice.toFixed(0),
-                leaderHistoricalDropdown: historicalDropdown,
-                leaderBasePrice: leaderBasePrice,
-                requiredPriceDrop: requiredPriceDrop.toFixed(2),
-                ourBreakEvenPrice: ourBreakEvenPrice.toFixed(0)
-            };
-        }
-
-        function displayResults(results) {
-            let html = `
-                <div class="result-block">
-                    <div class="result-block-title">📊 БАЛЛЫ ПО НЕСТОИМОСТНЫМ КРИТЕРИЯМ</div>
-            `;
-
-            results.criteria.forEach(c => {
-                html += `
-                    <div class="result-item">
-                        <strong>${c.name}</strong> (вес: ${c.weight}%)
-                        <div style="margin-left: 16px; font-size: 13px;">
-                            Ваша компания: ${c.yourValue} → <strong>${c.yourScore} баллов</strong>
-                            <br>Лидер рынка: ${c.leaderValue} → <strong>${c.leaderScore} баллов</strong>
-                        </div>
-                    </div>
-                `;
-            });
-
-            html += `
-                    <div class="result-highlight" style="margin-top: 16px;">
-                        Ваша сумма: <strong>${results.yourTotalNonCostScore} баллов</strong> 
-                        | Лидер: <strong>${results.leaderTotalNonCostScore} баллов</strong>
-                        | Разница: <strong>${(results.leaderTotalNonCostScore - results.yourTotalNonCostScore).toFixed(1)} баллов</strong>
-                    </div>
-                </div>
-
-                <div class="result-block">
-                    <div class="result-block-title">💰 РАСЧЁТ ПАРИТЕТА ПО ЦЕНЕ</div>
-                    <div class="result-item">
-                        Базовая цена лидера: <strong>${parseInt(results.leaderBasePrice).toLocaleString('ru-RU')} руб.</strong>
-                        <br>Историческое падение лидера: <strong>${results.leaderHistoricalDropdown}%</strong>
-                        <br>Текущая цена лидера: <strong>${parseInt(results.leaderCurrentPrice).toLocaleString('ru-RU')} руб.</strong>
-                    </div>
-                    <div class="result-highlight">
-                        ⭐ Вам нужно снизить цену на <strong>${results.requiredPriceDrop}%</strong>
-                        <br>Ваша цена для паритета баллов: <strong>${parseInt(results.ourBreakEvenPrice).toLocaleString('ru-RU')} руб.</strong>
-                    </div>
-                </div>
-            `;
-
-            calcResults.innerHTML = html;
-            calcResults.classList.add('active');
-        }
-
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorMessage.style.display = 'block';
-        }
-
-        function escapeHtml(text) {
-            if (!text) return '';
-            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-            return text.replace(/[&<>\"']/g, m => map[m]);
-        }
-    </script>
+    resetButton.addEventListener("click", () => {
+      document.querySelectorAll("input, textarea").forEach((input) => (input.value = ""));
+      document.getElementById("timezone").value = "+03:00";
+      document.getElementById("role").value = "founder";
+      document.getElementById("risk").value = "medium";
+      resultsSection.style.display = "none";
+    });
+  </script>
 </body>
 </html>
