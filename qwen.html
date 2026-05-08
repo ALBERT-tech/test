@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saby Trade Demo</title>
+<style>
+:root{--bg:#f5f7fa;--card:#fff;--primary:#2563eb;--text:#1f2937;--muted:#6b7280;--border:#e5e7eb}
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif}
+body{background:var(--bg);color:var(--text);padding:20px;max-width:800px;margin:0 auto}
+h1{font-size:1.5rem;margin-bottom:16px}
+.controls{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+input{padding:8px;border:1px solid var(--border);border-radius:6px;width:60px}
+button{padding:8px 16px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+#timer{font-size:.85rem;color:var(--muted);margin-bottom:12px;min-height:1.2em}
+.carousel{position:relative;overflow:hidden;border-radius:12px;touch-action:pan-y}
+.card{background:var(--card);padding:20px;border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.card h2{font-size:1.1rem;margin-bottom:8px}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;font-size:.85rem;margin-bottom:12px}
+.meta div{background:#f9fafb;padding:6px 8px;border-radius:6px}
+.meta strong{display:block;color:var(--muted);font-weight:500;font-size:.75rem}
+.items, .docs{margin-top:12px;font-size:.85rem}
+.items ul, .docs ul{padding-left:18px}
+.link{display:inline-block;margin-top:12px;color:var(--primary);text-decoration:none;font-weight:500}
+.hint{text-align:center;color:var(--muted);font-size:.8rem;margin-top:8px}
+</style>
+</head>
+<body>
+<h1>Демонстрация Saby Trade API</h1>
+<div class="controls">
+  <label>Тендеров (1-3):</label>
+  <input type="number" id="limit" min="1" max="3" value="3">
+  <button id="btn">Запросить данные</button>
+</div>
+<div id="timer"></div>
+<div class="carousel" id="carousel">
+  <div id="track"></div>
+  <div class="hint">← Свайп влево/вправо →</div>
+</div>
+
+<script>
+const AUTH_URL = 'https://online.sbis.ru/auth/service/';
+const API_URL = 'https://online.sbis.ru/tender-api/service/';
+const LOGIN = '5414318';
+const PASS = '10DJTgops=';
+const CACHE_MS = 5 * 60 * 1000;
+
+let lastReq = 0, sid = null, tenders = [], idx = 0, timerInt = null;
+const $ = s => document.querySelector(s);
+
+// Timer
+const tick = () => {
+  const diff = CACHE_MS - (Date.now() - lastReq);
+  if (diff > 0) {
+    $('#timer').textContent = `Доступно через: ${Math.ceil(diff/1000)} сек.`;
+    $('#btn').disabled = true;
+  } else {
+    $('#timer').textContent = 'Готово к запросу';
+    $('#btn').disabled = false;
+    if(timerInt) clearInterval(timerInt);
+  }
+};
+const startTimer = () => {
+  lastReq = Date.now();
+  tick();
+  timerInt = setInterval(tick, 1000);
+};
+
+// API Calls
+async function auth() {
+  const r = await fetch(AUTH_URL, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'САП.Аутентифицировать',params:{login:LOGIN,password:PASS},id:1})
+  });
+  const d = await r.json();
+  if(!d.result) throw new Error(d.error?.message || 'Auth error');
+  return d.result;
+}
+
+async function fetchDemo(limit) {
+  if(!sid) sid = await auth();
+  const r = await fetch(API_URL, {
+    method:'POST', headers:{'Content-Type':'application/json; charset=utf-8','Cookie':`sid=${sid}`},
+    body:JSON.stringify({jsonrpc:'2.0',protocol:4,method:'SbisTenderAPIDemo.GetTenderList',params:{limit},id:1})
+  });
+  const d = await r.json();
+  if(d.error) throw new Error(d.error.message);
+  return d.result?.tenders || [];
+}
+
+// Render
+const fmtDate = d => d ? new Date(d.replace(' ','T')).toLocaleString('ru') : '—';
+const render = () => {
+  if(!tenders.length) return $('#track').innerHTML = '<div class="card"><p>Нет данных</p></div>';
+  const t = tenders[idx];
+  const price = t.price ? `${t.price.toLocaleString('ru')} ${t.currency_code||'RUB'}` : 'Цена не указана';
+  const items = (t.lots||[]).flatMap(l=>l.items||[]).map(i=>`<li>${i.name} — ${i.quantity} ${i.okei_name||'шт'}</li>`).join('');
+  const docs = (t.docs||[]).map(d=>`<li><a href="${d.external_url}" target="_blank">${d.filename}</a></li>`).join('');
+  $('#track').innerHTML = `
+    <div class="card">
+      <h2>${t.name} <small style="color:var(--muted)">№${t.number}</small></h2>
+      <div class="meta">
+        <div><strong>Заказчик</strong>${t.organizer_name||t.initiator_name}</div>
+        <div><strong>Цена</strong>${price}</div>
+        <div><strong>Статус</strong>${t.status}</div>
+        <div><strong>Регион</strong>${t.region}</div>
+        <div><strong>Публикация</strong>${fmtDate(t.publish_date)}</div>
+        <div><strong>Приём до</strong>${fmtDate(t.request_receiving_end_date)}</div>
+      </div>
+      ${items?`<div class="items"><strong>Позиции:</strong><ul>${items}</ul></div>`:''}
+      ${docs?`<div class="docs"><strong>Документы:</strong><ul>${docs}</ul></div>`:''}
+      ${t.tender_url?`<a class="link" href="${t.tender_url}" target="_blank">Перейти на площадку ↗</a>`:''}
+    </div>`;
+};
+
+// Swipe
+let startX = 0;
+$('#carousel').addEventListener('touchstart', e => startX = e.touches[0].clientX);
+$('#carousel').addEventListener('mousedown', e => startX = e.clientX);
+$('#carousel').addEventListener('touchend', e => handleSwipe(e.changedTouches[0].clientX));
+$('#carousel').addEventListener('mouseup', e => handleSwipe(e.clientX));
+
+function handleSwipe(endX) {
+  if(!tenders.length) return;
+  const delta = startX - endX;
+  if(Math.abs(delta) < 50) return;
+  if(delta > 0) { // swipe left -> next
+    tenders.push(tenders.shift());
+  } else { // swipe right -> prev
+    tenders.unshift(tenders.pop());
+  }
+  idx = 0;
+  render();
+}
+
+// Init
+$('#btn').onclick = async () => {
+  const lim = parseInt($('#limit').value);
+  if(isNaN(lim)||lim<1||lim>3) return alert('Введите число от 1 до 3');
+  $('#btn').disabled = true;
+  $('#track').innerHTML = '<div class="card" style="text-align:center;padding:40px">Загрузка...</div>';
+  try {
+    tenders = await fetchDemo(lim);
+    idx = 0;
+    startTimer();
+    render();
+  } catch(e) {
+    $('#track').innerHTML = `<div class="card" style="color:red">Ошибка: ${e.message}<br><small>Проверьте CORS/сети или запустите через локальный прокси.</small></div>`;
+    $('#btn').disabled = false;
+  }
+};
+tick();
+</script>
+</body>
+</html>
