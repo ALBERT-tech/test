@@ -279,12 +279,15 @@
   D.directions.forEach(function (d) { dirByName[String(d.name).trim()] = d; });
 
   var origin = String(D.source || "").replace(/^(https?:\/\/[^\/]+).*$/, "$1");
+  var BITRIX_USER = "359"; // сегмент пути в ссылке на задачу; Bitrix переадресует и других пользователей
   function taskUrl(id) {
-    return origin + "/company/personal/user/297/tasks/task/view/" + encodeURIComponent(String(id)) + "/";
+    return origin + "/company/personal/user/" + BITRIX_USER + "/tasks/task/view/" + encodeURIComponent(String(id)) + "/";
   }
+  // Только поля task_id: обычные id/ID — внутренние идентификаторы элементов,
+  // ссылки на задачи по ним не открываются (так же различает их и плагин rb-sync)
   function rowTaskId(row) {
     if (!row || typeof row !== "object") return "";
-    var keys = ["ID", "id", "Id", "TASK_ID", "task_id"];
+    var keys = ["task_id", "TASK_ID", "taskId", "TASKID"];
     for (var i = 0; i < keys.length; i++) {
       if (row[keys[i]] != null && String(row[keys[i]]).trim() !== "") return String(row[keys[i]]).trim();
     }
@@ -385,7 +388,7 @@
   function openProcessCard(row) {
     var title = norm(row.TITLE);
     var card = cardByTitle[title.trim().toLowerCase()] || null;
-    var procId = rowTaskId(row) || (card ? String(card.id) : "");
+    var procId = rowTaskId(row) || (card ? rowTaskId(card) : "");
     var dirName = row.__dir || (card ? card.direction : "") || "";
     var dirObj = dirByName[String(dirName).trim()] || null;
     var dirTaskId = dirObj && dirObj.task_id ? String(dirObj.task_id) : "";
@@ -450,7 +453,7 @@
             '<div class="b-footer">' +
               (procId
                 ? 'Задача Bitrix24: <a href="' + esc(taskUrl(procId)) + '" target="_blank" rel="noopener">' + esc(taskUrl(procId)) + "</a>"
-                : "ID Bitrix24: не найден (перевыгрузите данные новой версией export-rb-data.ps1)") +
+                : "ID задачи Bitrix24 не найден: API не отдаёт task_id этого процесса (перевыгрузите данные новой версией export-rb-data.ps1; если не поможет — см. README)") +
             "</div>" +
           "</div>" +
         "</div>" +

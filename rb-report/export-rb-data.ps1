@@ -119,7 +119,25 @@ try {
       $payload = if ($isArr) { if ($pr.Count -gt 2 -and $pr[2] -is [Management.Automation.PSCustomObject]) { $pr[2] } else { $null } } else { $pr }
       $title = if ($isArr) { [string]$pr[0] } else { [string]$pr.TITLE }
       $dirName = if ($isArr) { [string]$pr[1] } else { [string]$pr.DIRECTION }
-      $card = [ordered]@{ id = $prId; TITLE = $title; direction = $dirName }
+      # id задачи Bitrix — только из полей task_id (обычный id — внутренний, ссылки по нему битые)
+      $taskId = ""
+      foreach ($tk in @("task_id", "TASK_ID", "taskId", "TASKID")) {
+        if ($payload -and $payload.PSObject.Properties[$tk] -and $null -ne $payload.PSObject.Properties[$tk].Value -and [string]$payload.PSObject.Properties[$tk].Value -ne "") {
+          $taskId = [string]$payload.PSObject.Properties[$tk].Value; break
+        }
+      }
+      if (-not $taskId -and $isArr) {
+        foreach ($el in $pr) {
+          if ($el -is [Management.Automation.PSCustomObject]) {
+            foreach ($tk in @("task_id", "TASK_ID", "taskId", "TASKID")) {
+              $p2 = $el.PSObject.Properties[$tk]
+              if ($p2 -and $null -ne $p2.Value -and [string]$p2.Value -ne "") { $taskId = [string]$p2.Value; break }
+            }
+          }
+          if ($taskId) { break }
+        }
+      }
+      $card = [ordered]@{ id = $prId; task_id = $taskId; TITLE = $title; direction = $dirName }
       foreach ($k in @("current_state","target_state","metrics","kpi_2026","january","february","march","quarter_1","april","may","june","quarter_2","resources")) {
         $card[$k] = if ($payload -and $null -ne $payload.$k) { [string]$payload.$k } else { "" }
       }
