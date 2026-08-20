@@ -103,15 +103,25 @@ foreach ($id in $ids) {
   }
 }
 
-$data = [ordered]@{
-  generated = (Get-Date).ToString("yyyy-MM-dd HH:mm")
-  source    = $base
-  directions = $directions
-  errors     = $errors
+# Сериализуем каждое направление отдельно и склеиваем вручную:
+# у ConvertTo-Json во встроенном PowerShell 5.1 лимит ~2 МБ на строку,
+# и на полном объёме данных (1000+ проектов) он превышается.
+$dirJsons = @()
+foreach ($dir in $directions) {
+  try { $dirJsons += (ConvertTo-Json -InputObject $dir -Depth 20 -Compress) }
+  catch {
+    $errors += [ordered]@{ id = $dir.id; error = ("сериализация: " + $_.Exception.Message) }
+    Write-Host ("Направление id=" + $dir.id + " не сериализовалось: " + $_.Exception.Message) -ForegroundColor Red
+  }
 }
+$errJson = if ($errors.Count) { ConvertTo-Json -InputObject @($errors) -Depth 5 -Compress } else { "[]" }
+$json = '{"generated":' + (ConvertTo-Json -InputObject ((Get-Date).ToString("yyyy-MM-dd HH:mm"))) +
+        ',"source":' + (ConvertTo-Json -InputObject $base) +
+        ',"directions":[' + ($dirJsons -join ",") + '],"errors":' + $errJson + "}"
 
-$json = ConvertTo-Json -InputObject $data -Depth 20 -Compress
 [IO.File]::WriteAllText($OutFile, "window.RB_DATA = " + $json + ";", (New-Object Text.UTF8Encoding($true)))
+if (-not (Test-Path $OutFile)) { throw ("Файл не записался: " + $OutFile) }
+Write-Host ("Размер rb-data.js: " + [Math]::Round((Get-Item $OutFile).Length / 1MB, 1) + " МБ")
 
 $totalProjects  = ($directions | ForEach-Object { $_.projects.Count }  | Measure-Object -Sum).Sum
 $totalProcesses = ($directions | ForEach-Object { $_.processes.Count } | Measure-Object -Sum).Sum
