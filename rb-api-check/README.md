@@ -5,6 +5,22 @@
 
 Рассчитан на запуск **с локального компа внутри сети**, где доступен Bitrix.
 
+## Если на компе нет Node.js («node не распознано»)
+
+Используйте PowerShell-версию `check-rb-api.ps1` — работает на встроенном Windows PowerShell 5.1, ставить ничего не нужно:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\check-rb-api.ps1 https://bitrix.rossilber.com КЛЮЧ
+powershell -ExecutionPolicy Bypass -File .\check-rb-api.ps1 http://192.168.1.10 КЛЮЧ
+powershell -ExecutionPolicy Bypass -File .\check-rb-api.ps1 https://bitrix.rossilber.com КЛЮЧ -Insecure
+powershell -ExecutionPolicy Bypass -File .\check-rb-api.ps1 https://bitrix.rossilber.com КЛЮЧ 89.189.154.97 -Insecure
+```
+
+Проверки те же, что в JS-версии; вместо ✅/⚠️/❌ печатает `[ OK ]`/`[WARN]`/`[FAIL]`.
+Нюанс: в режиме fallback-IP скрипт идёт по `https://IP` с Host-заголовком, поэтому проверка сертификата не пройдёт — добавляйте `-Insecure`.
+
+Либо поставьте Node.js (без прав администратора подойдёт «Windows Binary (.zip)» с nodejs.org — распаковать и запускать `путь\до\node.exe check-rb-api.js ...`; с правами — обычный установщик LTS или `winget install OpenJS.NodeJS.LTS`).
+
 ## Как получить на локальный комп
 
 Достаточно одного файла `check-rb-api.js` — скачайте его из репозитория (GitHub → Raw → сохранить) или склонируйте:
