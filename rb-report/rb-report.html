@@ -99,6 +99,62 @@
   .deadline-overdue { color: #b91c1c; font-weight: 600; }
   .empty-note { padding: 30px; text-align: center; color: var(--text-muted); }
 
+  .proc-link { color: var(--link); text-decoration: none; cursor: pointer; }
+  .proc-link:hover { text-decoration: underline; }
+
+  /* ---- карточка процесса (как в Bitrix) ---- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(40, 48, 57, .55);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 30px 16px; overflow: auto;
+  }
+  .b-card {
+    background: var(--bg); border-radius: 8px; width: 100%; max-width: 900px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.3); overflow: hidden;
+  }
+  .b-card-head {
+    background: var(--panel); border-bottom: 1px solid var(--border-strong);
+    padding: 14px 20px; display: flex; align-items: center; gap: 12px;
+  }
+  .b-card-head h2 { margin: 0; font-size: 16px; text-transform: uppercase; flex: 1; }
+  .b-close {
+    border: none; background: none; font-size: 22px; line-height: 1;
+    color: var(--text-muted); cursor: pointer; padding: 2px 8px;
+  }
+  .b-close:hover { color: var(--text); }
+  .b-card-body { padding: 16px 20px 20px; }
+  .b-strip { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+  .b-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .b-panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 14px; flex: 1 1 260px; min-width: 240px;
+  }
+  .b-panel .b-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+  .b-panel a { color: var(--link); text-decoration: none; }
+  .b-panel a:hover { text-decoration: underline; }
+  .b-list { list-style: none; margin: 4px 0 0; padding: 0; }
+  .b-list li {
+    display: flex; align-items: baseline; gap: 10px; justify-content: space-between;
+    padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border);
+  }
+  .b-list li:last-child { border-bottom: none; }
+  .b-item-title { flex: 1; min-width: 0; }
+  .b-item-meta { color: var(--text-muted); font-size: 12px; white-space: nowrap; text-align: right; }
+  .b-item-meta .deadline-overdue { font-size: 12px; }
+  .b-done, .b-done a { text-decoration: line-through; color: var(--text-muted) !important; }
+  .b-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .b-field {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px;
+  }
+  .b-field .b-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+  .b-field .b-val { font-size: 13px; white-space: pre-line; min-height: 18px; }
+  .b-footer {
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+    font-size: 13px; color: var(--text-muted);
+  }
+  .b-footer a { color: var(--link); }
+
   .nodata {
     max-width: 640px; margin: 60px auto; background: var(--panel);
     border: 1px solid var(--border); border-radius: 8px; padding: 28px 32px;
@@ -144,6 +200,8 @@
   <p><code>powershell -ExecutionPolicy Bypass -File .\export-rb-data.ps1 https://адрес/путь/api КЛЮЧ</code></p>
   <p>и обновите эту страницу (F5).</p>
 </div>
+
+<div id="modal" style="display:none"></div>
 
 <script src="rb-data.js"></script>
 <script>
@@ -210,8 +268,32 @@
     });
   });
 
+  // Карточки процессов из process.php (несут Bitrix-ID); сопоставляем по названию
+  var processCards = arr(D.processCards);
+  var cardByTitle = {};
+  processCards.forEach(function (c) {
+    var k = String(c.TITLE || "").trim().toLowerCase();
+    if (k && !cardByTitle[k]) cardByTitle[k] = c;
+  });
+  var dirByName = {};
+  D.directions.forEach(function (d) { dirByName[String(d.name).trim()] = d; });
+
+  var origin = String(D.source || "").replace(/^(https?:\/\/[^\/]+).*$/, "$1");
+  function taskUrl(id) {
+    return origin + "/company/personal/user/297/tasks/task/view/" + encodeURIComponent(String(id)) + "/";
+  }
+  function rowTaskId(row) {
+    if (!row || typeof row !== "object") return "";
+    var keys = ["ID", "id", "Id", "TASK_ID", "task_id"];
+    for (var i = 0; i < keys.length; i++) {
+      if (row[keys[i]] != null && String(row[keys[i]]).trim() !== "") return String(row[keys[i]]).trim();
+    }
+    return "";
+  }
+
   var $ = function (id) { return document.getElementById(id); };
   var state = { tab: "projects", dir: "", place: "", status: "", q: "", sortKey: "", sortDir: 1 };
+  var lastProcessRows = [];
 
   function fillSelect(el, values, allLabel) {
     el.innerHTML = '<option value="">' + allLabel + "</option>" +
@@ -285,6 +367,103 @@
     return '<span class="status st-' + s + '">' + label + "</span>";
   }
 
+  // ---------- карточка процесса ----------
+  var modal = document.getElementById("modal");
+
+  function projectItem(p) {
+    var pid = rowTaskId(p);
+    var done = p.STATUS == 5;
+    var label = esc(norm(p.TITLE)) + (p.PRIORITY == 2 ? ' <span class="fire">🔥</span>' : "");
+    var title = pid ? '<a href="' + esc(taskUrl(pid)) + '" target="_blank" rel="noopener">' + label + "</a>" : label;
+    var dl = String(p.DEADLINE || "").trim();
+    var meta = esc(p.RESPONSIBLE || "") +
+      (dl ? " · " + (isOverdue(p) ? '<span class="deadline-overdue">' + esc(dl) + "</span>" : esc(dl)) : " · Без срока");
+    return '<li' + (done ? ' class="b-done"' : "") + '><span class="b-item-title">' + title +
+      '</span><span class="b-item-meta">' + meta + "</span></li>";
+  }
+
+  function openProcessCard(row) {
+    var title = norm(row.TITLE);
+    var card = cardByTitle[title.trim().toLowerCase()] || null;
+    var procId = rowTaskId(row) || (card ? String(card.id) : "");
+    var dirName = row.__dir || (card ? card.direction : "") || "";
+    var dirObj = dirByName[String(dirName).trim()] || null;
+    var dirTaskId = dirObj && dirObj.task_id ? String(dirObj.task_id) : "";
+
+    var related = projects.filter(function (p) {
+      return String(p.PROCESS_OF_PROJECT || "").trim() === title.trim();
+    });
+    var top = related.filter(function (p) { return p.PRIORITY == 2; });
+    var usual = related.filter(function (p) { return p.PRIORITY != 2; });
+
+    function fieldVal(k) {
+      var v = row[k];
+      if ((v == null || String(v).trim() === "") && card) v = card[k];
+      return norm(v);
+    }
+    var FIELDS = [
+      ["current_state", "Текущее состояние"], ["target_state", "Целевое состояние"], ["metrics", "Метрики"],
+      ["kpi_2026", "KPI 2026"], ["january", "KPI январь"], ["february", "KPI февраль"], ["march", "KPI март"],
+      ["quarter_1", "KPI 1-Квартал"], ["april", "KPI апрель"], ["may", "KPI май"], ["june", "KPI июнь"],
+      ["quarter_2", "KPI II кв."]
+    ];
+
+    modal.innerHTML =
+      '<div class="overlay">' +
+        '<div class="b-card">' +
+          '<div class="b-card-head"><h2>' + esc(title) + '</h2><button class="b-close" title="Закрыть">×</button></div>' +
+          '<div class="b-card-body">' +
+            '<div class="b-strip">Процесс: ' + esc(title) + "</div>" +
+            '<div class="b-row">' +
+              '<div class="b-panel"><div class="b-label">Направление (родительская задача)</div>' +
+                (dirName
+                  ? (dirTaskId
+                      ? '<a href="' + esc(taskUrl(dirTaskId)) + '" target="_blank" rel="noopener">' + esc(dirName) + "</a>"
+                      : esc(dirName))
+                  : '<span style="color:var(--text-muted)">Без направления</span>') +
+              "</div>" +
+              '<div class="b-panel"><div class="b-label">Процесс</div>' +
+                (procId
+                  ? '<a href="' + esc(taskUrl(procId)) + '" target="_blank" rel="noopener">' + esc(title) + "</a>"
+                  : esc(title)) +
+              "</div>" +
+            "</div>" +
+            '<div class="b-panel" style="margin-bottom:12px">' +
+              '<div class="b-label">Связанные проекты (подзадачи)</div>' +
+              (related.length
+                ? '<div class="b-row" style="margin-bottom:0">' +
+                    '<div class="b-panel"><div class="b-label">Топ-проекты</div>' +
+                      (top.length ? '<ul class="b-list">' + top.map(projectItem).join("") + "</ul>" : '<span style="color:var(--text-muted)">—</span>') +
+                    "</div>" +
+                    '<div class="b-panel"><div class="b-label">Обычные проекты</div>' +
+                      (usual.length ? '<ul class="b-list">' + usual.map(projectItem).join("") + "</ul>" : '<span style="color:var(--text-muted)">—</span>') +
+                    "</div>" +
+                  "</div>"
+                : '<span style="color:var(--text-muted)">Нет связанных проектов</span>') +
+            "</div>" +
+            '<div class="b-label" style="font-size:12px;color:var(--text-muted);margin-bottom:6px">Поля процесса</div>' +
+            '<div class="b-fields">' +
+              FIELDS.map(function (f) {
+                return '<div class="b-field"><div class="b-label">' + f[1] + '</div><div class="b-val">' + esc(fieldVal(f[0])) + "</div></div>";
+              }).join("") +
+            "</div>" +
+            '<div class="b-footer">' +
+              (procId
+                ? 'Задача Bitrix24: <a href="' + esc(taskUrl(procId)) + '" target="_blank" rel="noopener">' + esc(taskUrl(procId)) + "</a>"
+                : "ID Bitrix24: не найден (перевыгрузите данные новой версией export-rb-data.ps1)") +
+            "</div>" +
+          "</div>" +
+        "</div>" +
+      "</div>";
+    modal.style.display = "block";
+  }
+
+  function closeCard() { modal.style.display = "none"; modal.innerHTML = ""; }
+  modal.addEventListener("click", function (e) {
+    if (e.target.classList.contains("overlay") || e.target.classList.contains("b-close")) closeCard();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeCard(); });
+
   function renderChips(rows) {
     var top = 0, done = 0, overdue = 0;
     rows.forEach(function (p) {
@@ -333,9 +512,13 @@
       });
       $("chips").innerHTML = '<div class="chip">Всего процессов<b>' + rows2.length + "</b></div>";
       renderHead(PROCESS_COLS);
-      tbody.innerHTML = rows2.map(function (p) {
+      lastProcessRows = rows2;
+      tbody.innerHTML = rows2.map(function (p, ri) {
         return "<tr>" + PROCESS_COLS.map(function (c, i) {
-          var cls = i === 0 ? ' class="dir-cell"' : i === 1 ? ' class="title-cell"' : "";
+          if (i === 1) {
+            return '<td class="title-cell"><a class="proc-link" href="#" data-ri="' + ri + '">' + esc(norm(p[c[0]])) + "</a></td>";
+          }
+          var cls = i === 0 ? ' class="dir-cell"' : "";
           return "<td" + cls + ">" + esc(norm(p[c[0]])) + "</td>";
         }).join("") + "</tr>";
       }).join("") || '<tr><td colspan="14" class="empty-note">Ничего не найдено</td></tr>';
@@ -374,6 +557,13 @@
     state.tab = tab; state.sortKey = "";
     document.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === tab); });
     render();
+  });
+  document.querySelector("#grid tbody").addEventListener("click", function (e) {
+    var a = e.target.closest("a.proc-link");
+    if (!a) return;
+    e.preventDefault();
+    var row = lastProcessRows[+a.getAttribute("data-ri")];
+    if (row) openProcessCard(row);
   });
   document.querySelector("#grid thead").addEventListener("click", function (e) {
     var th = e.target.closest("th");

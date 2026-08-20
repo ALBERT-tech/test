@@ -95,12 +95,43 @@ foreach ($id in $ids) {
     $name = if ($d[0] -is [string] -and $d[0].Trim()) { $d[0].Trim() } else { "Без названия" }
     $processes = if ($d.Count -gt 1 -and $d[1] -is [array]) { @($d[1]) } else { @() }
     $projects  = if ($d.Count -gt 2 -and $d[2] -is [array]) { @($d[2]) } else { @() }
-    $directions += [ordered]@{ id = $id; name = $name; processes = $processes; projects = $projects }
+    $taskId = if ($d.Count -gt 3 -and $d[3] -is [Management.Automation.PSCustomObject] -and $null -ne $d[3].task_id) { [string]$d[3].task_id } else { "" }
+    $directions += [ordered]@{ id = $id; name = $name; task_id = $taskId; processes = $processes; projects = $projects }
     Write-Host ("[{0,2}/{1}] id={2}  {3}  (процессов: {4}, проектов: {5})" -f $i, $ids.Count, $id, $name, $processes.Count, $projects.Count)
   } catch {
     $errors += [ordered]@{ id = $id; error = $_.Exception.Message }
     Write-Host ("[{0,2}/{1}] id={2}  ОШИБКА: {3}" -f $i, $ids.Count, $id, $_.Exception.Message) -ForegroundColor Red
   }
+}
+
+# ---------- Карточки процессов (Bitrix-ID для ссылок и полные поля) ----------
+$processCards = @()
+try {
+  $procIdsRaw = Fetch-Json "process.php" $null
+  $procIds = if ($procIdsRaw -is [array]) { @($procIdsRaw | ForEach-Object { Extract-Id $_ } | Where-Object { $null -ne $_ }) } else { @() }
+  Write-Host ("`nПроцессов в списке: " + $procIds.Count + " — забираю карточки для ссылок на Bitrix...")
+  $j = 0
+  foreach ($prId in $procIds) {
+    $j++
+    try {
+      $pr = Fetch-Json "process.php" $prId
+      $isArr = $pr -is [array]
+      $payload = if ($isArr) { if ($pr.Count -gt 2 -and $pr[2] -is [Management.Automation.PSCustomObject]) { $pr[2] } else { $null } } else { $pr }
+      $title = if ($isArr) { [string]$pr[0] } else { [string]$pr.TITLE }
+      $dirName = if ($isArr) { [string]$pr[1] } else { [string]$pr.DIRECTION }
+      $card = [ordered]@{ id = $prId; TITLE = $title; direction = $dirName }
+      foreach ($k in @("current_state","target_state","metrics","kpi_2026","january","february","march","quarter_1","april","may","june","quarter_2","resources")) {
+        $card[$k] = if ($payload -and $null -ne $payload.$k) { [string]$payload.$k } else { "" }
+      }
+      $processCards += $card
+      if ($j % 20 -eq 0 -or $j -eq $procIds.Count) { Write-Host ("  " + $j + "/" + $procIds.Count) }
+    } catch {
+      $errors += [ordered]@{ id = ("process " + $prId); error = $_.Exception.Message }
+      Write-Host ("  процесс id=" + $prId + " ОШИБКА: " + $_.Exception.Message) -ForegroundColor Red
+    }
+  }
+} catch {
+  Write-Host ("Список процессов не получен (карточки будут без ссылок на Bitrix): " + $_.Exception.Message) -ForegroundColor Red
 }
 
 # JSON собираем вручную, сериализуя по одному объекту за раз. Это обходит сразу
@@ -117,6 +148,7 @@ $dirJsons = @()
 foreach ($dir in $directions) {
   try {
     $dirJsons += ('{"id":' + (Json-Str $dir.id) + ',"name":' + (Json-Str $dir.name) +
+                  ',"task_id":' + (Json-Str $dir.task_id) +
                   ',"processes":' + (Json-Rows $dir.processes) +
                   ',"projects":' + (Json-Rows $dir.projects) + '}')
   } catch {
@@ -126,7 +158,8 @@ foreach ($dir in $directions) {
 }
 $json = '{"generated":' + (Json-Str ((Get-Date).ToString("yyyy-MM-dd HH:mm"))) +
         ',"source":' + (Json-Str $base) +
-        ',"directions":[' + ($dirJsons -join ",") + '],"errors":' + (Json-Rows $errors) + "}"
+        ',"directions":[' + ($dirJsons -join ",") + '],"processCards":' + (Json-Rows $processCards) +
+        ',"errors":' + (Json-Rows $errors) + "}"
 
 [IO.File]::WriteAllText($OutFile, "window.RB_DATA = " + $json + ";", (New-Object Text.UTF8Encoding($true)))
 if (-not (Test-Path $OutFile)) { throw ("Файл не записался: " + $OutFile) }
