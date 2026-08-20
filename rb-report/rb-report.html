@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Россильбер — портфель проектов и процессы</title>
+<style>
+  :root {
+    --border: #e5eaef;
+    --border-strong: #d5dde5;
+    --text: #333f4d;
+    --text-muted: #7c8794;
+    --link: #1e6ec8;
+    --bg: #eef2f4;
+    --panel: #ffffff;
+    --hover: #f5f9fc;
+    --accent: #2fc6f6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 14px/1.45 "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+  }
+  .topbar {
+    background: #535c69;
+    color: #fff;
+    padding: 12px 24px;
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  }
+  .topbar h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  .topbar .meta { font-size: 12px; color: #bdc4cc; }
+  .wrap { padding: 16px 24px 40px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .tab {
+    background: transparent; border: none; cursor: pointer;
+    font: 600 13px/1 inherit; text-transform: uppercase; letter-spacing: .3px;
+    color: var(--text-muted); padding: 10px 14px 12px; border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--text); }
+
+  .filters {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 12px;
+  }
+  .filters select, .filters input[type=search] {
+    font: inherit; color: var(--text);
+    border: 1px solid var(--border-strong); border-radius: 4px;
+    padding: 6px 8px; background: #fff; max-width: 340px;
+  }
+  .filters input[type=search] { flex: 1 1 220px; min-width: 180px; }
+  .filters select:focus, .filters input:focus { outline: none; border-color: var(--accent); }
+
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 14px; font-size: 12px; color: var(--text-muted);
+  }
+  .chip b { display: block; font-size: 18px; color: var(--text); }
+  .chip.c-top b { color: #b45309; }
+  .chip.c-active b { color: #0369a1; }
+  .chip.c-done b { color: #15803d; }
+  .chip.c-overdue b { color: #b91c1c; }
+
+  .grid-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    overflow: auto; max-height: calc(100vh - 118px);
+  }
+  table { border-collapse: collapse; width: 100%; }
+  thead th {
+    position: sticky; top: 0; z-index: 5;
+    background: #f8fafb; color: var(--text-muted);
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px;
+    text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border-strong);
+    white-space: nowrap; cursor: pointer; user-select: none;
+  }
+  thead th .arr { color: var(--accent); margin-left: 3px; }
+  tbody td {
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    vertical-align: top; white-space: pre-line; min-width: 110px; max-width: 360px;
+  }
+  tbody tr:hover td { background: var(--hover); }
+  td.num { text-align: right; min-width: 60px; }
+  td.nowrap { white-space: nowrap; }
+  .dir-cell { color: var(--text-muted); font-size: 12px; min-width: 150px; }
+  .title-cell { font-weight: 600; min-width: 240px; }
+  .fire { margin-left: 4px; }
+  .status {
+    display: inline-block; font-size: 12px; font-weight: 600;
+    border-radius: 10px; padding: 2px 10px; white-space: nowrap;
+  }
+  .st-active  { background: #e0f2fe; color: #0369a1; }
+  .st-done    { background: #dcfce7; color: #15803d; }
+  .st-overdue { background: #fee2e2; color: #b91c1c; }
+  .deadline-overdue { color: #b91c1c; font-weight: 600; }
+  .empty-note { padding: 30px; text-align: center; color: var(--text-muted); }
+
+  .nodata {
+    max-width: 640px; margin: 60px auto; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 8px; padding: 28px 32px;
+  }
+  .nodata code { background: #f2f4f6; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  .nodata h2 { margin-top: 0; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>Россильбер · портфель проектов</h1>
+  <span class="meta" id="meta"></span>
+</div>
+
+<div class="wrap" id="app" style="display:none">
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="projects">Проекты</button>
+    <button class="tab" data-tab="processes">Процессы</button>
+    <button class="tab" data-tab="directions">Направления</button>
+  </div>
+
+  <div class="filters">
+    <select id="f-dir"></select>
+    <select id="f-place"></select>
+    <select id="f-status">
+      <option value="">Все статусы</option>
+      <option value="top">Топ 🔥</option>
+      <option value="active">Выполняется</option>
+      <option value="done">Завершено</option>
+      <option value="overdue">Просрочен</option>
+    </select>
+    <input type="search" id="f-q" placeholder="Поиск по названию, лидеру, целям…">
+  </div>
+
+  <div class="chips" id="chips"></div>
+  <div class="grid-box"><table id="grid"><thead></thead><tbody></tbody></table></div>
+</div>
+
+<div class="nodata" id="nodata" style="display:none">
+  <h2>Нет данных</h2>
+  <p>Рядом с этим файлом должен лежать <code>rb-data.js</code> — выгрузка из Bitrix.</p>
+  <p>Сформируйте её скриптом (в этой же папке):</p>
+  <p><code>powershell -ExecutionPolicy Bypass -File .\export-rb-data.ps1 https://адрес/путь/api КЛЮЧ</code></p>
+  <p>и обновите эту страницу (F5).</p>
+</div>
+
+<script src="rb-data.js"></script>
+<script>
+(function () {
+  var D = window.RB_DATA;
+  if (!D || !Array.isArray(D.directions)) {
+    document.getElementById("nodata").style.display = "block";
+    return;
+  }
+  document.getElementById("app").style.display = "block";
+  document.getElementById("meta").textContent =
+    "выгрузка от " + (D.generated || "?") + " · " + (D.source || "");
+
+  function esc(v) {
+    return String(v == null ? "" : v)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function norm(v) { return String(v == null ? "" : v).replace(/\r?\n\s*\r?\n/g, "\n").trim(); }
+
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  function isOverdue(p) {
+    if (p.STATUS == 5 || !p.DEADLINE) return false;
+    var d = new Date(p.DEADLINE);
+    if (isNaN(d.getTime())) return false;
+    d.setHours(0, 0, 0, 0);
+    return d < today;
+  }
+  function statusOf(p) {
+    if (p.STATUS == 5) return "done";
+    if (isOverdue(p)) return "overdue";
+    return "active";
+  }
+
+  var projects = [], processes = [];
+  D.directions.forEach(function (dir) {
+    (dir.projects || []).forEach(function (p) {
+      projects.push(Object.assign({ __dir: dir.name }, p));
+    });
+    (dir.processes || []).forEach(function (p) {
+      processes.push(Object.assign({ __dir: dir.name }, p));
+    });
+  });
+
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { tab: "projects", dir: "", place: "", status: "", q: "", sortKey: "", sortDir: 1 };
+
+  function fillSelect(el, values, allLabel) {
+    el.innerHTML = '<option value="">' + allLabel + "</option>" +
+      values.map(function (v) { return '<option value="' + esc(v) + '">' + esc(v) + "</option>"; }).join("");
+  }
+  fillSelect($("f-dir"), D.directions.map(function (d) { return d.name; }), "Все направления");
+  var places = {};
+  projects.forEach(function (p) { places[norm(p.place) || "Без площадки"] = 1; });
+  fillSelect($("f-place"), Object.keys(places).sort(), "Все площадки");
+
+  function matchQ(row, keys) {
+    if (!state.q) return true;
+    var q = state.q.toLowerCase();
+    return keys.some(function (k) { return String(row[k] == null ? "" : row[k]).toLowerCase().indexOf(q) >= 0; });
+  }
+
+  function filteredProjects() {
+    return projects.filter(function (p) {
+      if (state.dir && p.__dir !== state.dir) return false;
+      if (state.place && (norm(p.place) || "Без площадки") !== state.place) return false;
+      if (state.status === "top" && p.PRIORITY != 2) return false;
+      if (["active", "done", "overdue"].indexOf(state.status) >= 0 && statusOf(p) !== state.status) return false;
+      return matchQ(p, ["TITLE", "place", "RESPONSIBLE", "strateg_target", "PROCESS_OF_PROJECT", "effect_plan", "effect_fact", "__dir"]);
+    });
+  }
+  function filteredProcesses() {
+    return processes.filter(function (p) {
+      if (state.dir && p.__dir !== state.dir) return false;
+      return matchQ(p, ["TITLE", "current_state", "target_state", "metrics", "kpi_2026", "__dir"]);
+    });
+  }
+
+  function sortRows(rows, defaultCmp) {
+    if (!state.sortKey) return rows.slice().sort(defaultCmp);
+    var k = state.sortKey, d = state.sortDir;
+    return rows.slice().sort(function (a, b) {
+      var av = String(a[k] == null ? "" : a[k]), bv = String(b[k] == null ? "" : b[k]);
+      var an = parseFloat(av), bn = parseFloat(bv);
+      if (!isNaN(an) && !isNaN(bn) && String(an) === av.trim() && String(bn) === bv.trim()) return (an - bn) * d;
+      return av.localeCompare(bv, "ru") * d;
+    });
+  }
+
+  var PROJECT_COLS = [
+    ["__dir", "Направление"], ["place", "Площадка"], ["TITLE", "Проект"],
+    ["PROCESS_OF_PROJECT", "Процесс"], ["__status", "Статус"], ["DEADLINE", "Срок"],
+    ["RESPONSIBLE", "Лидер проекта"], ["effect_plan", "Эффект план"],
+    ["effect_fact", "Эффект факт"], ["strateg_target", "Влияние на страт. цель"]
+  ];
+  var PROCESS_COLS = [
+    ["__dir", "Направление"], ["TITLE", "Процесс"], ["current_state", "Текущее состояние"],
+    ["target_state", "Целевое состояние"], ["metrics", "Метрики"], ["kpi_2026", "KPI 2026"],
+    ["january", "Янв"], ["february", "Фев"], ["march", "Мар"], ["quarter_1", "I кв."],
+    ["april", "Апр"], ["may", "Май"], ["june", "Июн"], ["quarter_2", "II кв."]
+  ];
+  var DIRECTION_COLS = [
+    ["name", "Направление"], ["__proc", "Процессов"], ["__proj", "Проектов"],
+    ["__top", "Топ 🔥"], ["__active", "Выполняется"], ["__done", "Завершено"], ["__overdue", "Просрочено"]
+  ];
+
+  function renderHead(cols) {
+    document.querySelector("#grid thead").innerHTML = "<tr>" + cols.map(function (c) {
+      var arr = state.sortKey === c[0] ? '<span class="arr">' + (state.sortDir > 0 ? "▲" : "▼") + "</span>" : "";
+      return '<th data-key="' + c[0] + '">' + c[1] + arr + "</th>";
+    }).join("") + "</tr>";
+  }
+
+  function statusCell(p) {
+    var s = statusOf(p);
+    var label = s === "done" ? "Завершено" : s === "overdue" ? "Просрочен" : "Выполняется";
+    return '<span class="status st-' + s + '">' + label + "</span>";
+  }
+
+  function renderChips(rows) {
+    var top = 0, done = 0, overdue = 0;
+    rows.forEach(function (p) {
+      if (p.PRIORITY == 2) top++;
+      var s = statusOf(p);
+      if (s === "done") done++; else if (s === "overdue") overdue++;
+    });
+    $("chips").innerHTML =
+      '<div class="chip">Всего<b>' + rows.length + "</b></div>" +
+      '<div class="chip c-top">Топ 🔥<b>' + top + "</b></div>" +
+      '<div class="chip c-active">Выполняется<b>' + (rows.length - done - overdue) + "</b></div>" +
+      '<div class="chip c-done">Завершено<b>' + done + "</b></div>" +
+      '<div class="chip c-overdue">Просрочено<b>' + overdue + "</b></div>";
+  }
+
+  function render() {
+    var tbody = document.querySelector("#grid tbody");
+    var isProjects = state.tab === "projects";
+    $("f-place").style.display = isProjects ? "" : "none";
+    $("f-status").style.display = isProjects ? "" : "none";
+    $("f-dir").style.display = state.tab === "directions" ? "none" : "";
+
+    if (state.tab === "projects") {
+      var rows = sortRows(filteredProjects(), function (a, b) {
+        return ((b.PRIORITY == 2) - (a.PRIORITY == 2)) || String(a.__dir).localeCompare(String(b.__dir), "ru");
+      });
+      renderChips(rows);
+      renderHead(PROJECT_COLS);
+      tbody.innerHTML = rows.map(function (p) {
+        return "<tr>" +
+          '<td class="dir-cell">' + esc(p.__dir) + "</td>" +
+          "<td>" + esc(norm(p.place) || "Без площадки") + "</td>" +
+          '<td class="title-cell">' + esc(norm(p.TITLE)) + (p.PRIORITY == 2 ? '<span class="fire">🔥</span>' : "") + "</td>" +
+          "<td>" + esc(norm(p.PROCESS_OF_PROJECT)) + "</td>" +
+          '<td class="nowrap">' + statusCell(p) + "</td>" +
+          '<td class="nowrap' + (isOverdue(p) ? " deadline-overdue" : "") + '">' + esc(p.DEADLINE || "Нет даты") + "</td>" +
+          "<td>" + esc(p.RESPONSIBLE || "") + "</td>" +
+          "<td>" + esc(norm(p.effect_plan)) + "</td>" +
+          "<td>" + esc(norm(p.effect_fact)) + "</td>" +
+          "<td>" + esc(norm(p.strateg_target)) + "</td>" +
+        "</tr>";
+      }).join("") || '<tr><td colspan="10" class="empty-note">Ничего не найдено</td></tr>';
+    } else if (state.tab === "processes") {
+      var rows2 = sortRows(filteredProcesses(), function (a, b) {
+        return String(a.__dir).localeCompare(String(b.__dir), "ru") || String(a.TITLE || "").localeCompare(String(b.TITLE || ""), "ru");
+      });
+      $("chips").innerHTML = '<div class="chip">Всего процессов<b>' + rows2.length + "</b></div>";
+      renderHead(PROCESS_COLS);
+      tbody.innerHTML = rows2.map(function (p) {
+        return "<tr>" + PROCESS_COLS.map(function (c, i) {
+          var cls = i === 0 ? ' class="dir-cell"' : i === 1 ? ' class="title-cell"' : "";
+          return "<td" + cls + ">" + esc(norm(p[c[0]])) + "</td>";
+        }).join("") + "</tr>";
+      }).join("") || '<tr><td colspan="14" class="empty-note">Ничего не найдено</td></tr>';
+    } else {
+      var dirRows = D.directions.map(function (d) {
+        var projs = (d.projects || []);
+        var stat = { name: d.name, __proc: (d.processes || []).length, __proj: projs.length, __top: 0, __done: 0, __overdue: 0 };
+        projs.forEach(function (p) {
+          if (p.PRIORITY == 2) stat.__top++;
+          var s = statusOf(p);
+          if (s === "done") stat.__done++; else if (s === "overdue") stat.__overdue++;
+        });
+        stat.__active = stat.__proj - stat.__done - stat.__overdue;
+        return stat;
+      });
+      dirRows = sortRows(dirRows, function (a, b) { return String(a.name).localeCompare(String(b.name), "ru"); });
+      $("chips").innerHTML = '<div class="chip">Направлений<b>' + dirRows.length + "</b></div>";
+      renderHead(DIRECTION_COLS);
+      tbody.innerHTML = dirRows.map(function (d) {
+        return "<tr>" +
+          '<td class="title-cell">' + esc(d.name) + "</td>" +
+          '<td class="num">' + d.__proc + "</td>" +
+          '<td class="num">' + d.__proj + "</td>" +
+          '<td class="num">' + d.__top + "</td>" +
+          '<td class="num">' + d.__active + "</td>" +
+          '<td class="num">' + d.__done + "</td>" +
+          '<td class="num">' + (d.__overdue ? '<span class="deadline-overdue">' + d.__overdue + "</span>" : 0) + "</td>" +
+        "</tr>";
+      }).join("");
+    }
+  }
+
+  document.getElementById("tabs").addEventListener("click", function (e) {
+    var tab = e.target.getAttribute("data-tab");
+    if (!tab) return;
+    state.tab = tab; state.sortKey = "";
+    document.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === tab); });
+    render();
+  });
+  document.querySelector("#grid thead").addEventListener("click", function (e) {
+    var th = e.target.closest("th");
+    if (!th) return;
+    var key = th.getAttribute("data-key");
+    if (state.sortKey === key) { state.sortDir = -state.sortDir; } else { state.sortKey = key; state.sortDir = 1; }
+    render();
+  });
+  $("f-dir").addEventListener("change", function () { state.dir = this.value; render(); });
+  $("f-place").addEventListener("change", function () { state.place = this.value; render(); });
+  $("f-status").addEventListener("change", function () { state.status = this.value; render(); });
+  $("f-q").addEventListener("input", function () { state.q = this.value.trim(); render(); });
+
+  render();
+})();
+</script>
+</body>
+</html>
