@@ -103,21 +103,30 @@ foreach ($id in $ids) {
   }
 }
 
-# Сериализуем каждое направление отдельно и склеиваем вручную:
-# у ConvertTo-Json во встроенном PowerShell 5.1 лимит ~2 МБ на строку,
-# и на полном объёме данных (1000+ проектов) он превышается.
+# JSON собираем вручную, сериализуя по одному объекту за раз. Это обходит сразу
+# два дефекта ConvertTo-Json во встроенном PowerShell 5.1: лимит ~2 МБ на строку
+# и баг, из-за которого массив из пайплайна превращается в {"value":[...],"Count":N}.
+function Json-Str($v) { return (ConvertTo-Json -InputObject ([string]$v) -Compress) }
+function Json-Rows($items) {
+  $parts = @()
+  foreach ($it in @($items)) { $parts += (ConvertTo-Json -InputObject $it -Depth 10 -Compress) }
+  return "[" + ($parts -join ",") + "]"
+}
+
 $dirJsons = @()
 foreach ($dir in $directions) {
-  try { $dirJsons += (ConvertTo-Json -InputObject $dir -Depth 20 -Compress) }
-  catch {
+  try {
+    $dirJsons += ('{"id":' + (Json-Str $dir.id) + ',"name":' + (Json-Str $dir.name) +
+                  ',"processes":' + (Json-Rows $dir.processes) +
+                  ',"projects":' + (Json-Rows $dir.projects) + '}')
+  } catch {
     $errors += [ordered]@{ id = $dir.id; error = ("сериализация: " + $_.Exception.Message) }
     Write-Host ("Направление id=" + $dir.id + " не сериализовалось: " + $_.Exception.Message) -ForegroundColor Red
   }
 }
-$errJson = if ($errors.Count) { ConvertTo-Json -InputObject @($errors) -Depth 5 -Compress } else { "[]" }
-$json = '{"generated":' + (ConvertTo-Json -InputObject ((Get-Date).ToString("yyyy-MM-dd HH:mm"))) +
-        ',"source":' + (ConvertTo-Json -InputObject $base) +
-        ',"directions":[' + ($dirJsons -join ",") + '],"errors":' + $errJson + "}"
+$json = '{"generated":' + (Json-Str ((Get-Date).ToString("yyyy-MM-dd HH:mm"))) +
+        ',"source":' + (Json-Str $base) +
+        ',"directions":[' + ($dirJsons -join ",") + '],"errors":' + (Json-Rows $errors) + "}"
 
 [IO.File]::WriteAllText($OutFile, "window.RB_DATA = " + $json + ";", (New-Object Text.UTF8Encoding($true)))
 if (-not (Test-Path $OutFile)) { throw ("Файл не записался: " + $OutFile) }

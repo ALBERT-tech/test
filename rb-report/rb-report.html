@@ -148,7 +148,30 @@
 <script src="rb-data.js"></script>
 <script>
 (function () {
+  // Приводим значение к массиву в любой из форм, которые отдаёт PowerShell 5.1:
+  // нормальный массив, обёртка {"value":[...],"Count":N}, объект с числовыми
+  // ключами (PHP json_encode ассоциативного массива) или одиночный объект.
+  function arr(v) {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === "object") {
+      if (Array.isArray(v.value)) return v.value;
+      var keys = Object.keys(v);
+      if (keys.length && keys.every(function (k) { return /^\d+$/.test(k); })) {
+        return keys.sort(function (a, b) { return a - b; }).map(function (k) { return v[k]; });
+      }
+      return [v];
+    }
+    return [];
+  }
+
   var D = window.RB_DATA;
+  if (D && D.directions) {
+    D.directions = arr(D.directions).map(function (d) {
+      d.processes = arr(d.processes);
+      d.projects = arr(d.projects);
+      return d;
+    });
+  }
   if (!D || !Array.isArray(D.directions)) {
     document.getElementById("nodata").style.display = "block";
     return;
